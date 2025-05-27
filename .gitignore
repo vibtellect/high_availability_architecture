@@ -629,4 +629,5 @@ tasks/
 
 scripts/
 plannung/
-localstack-data/*
+localstack-data/
+localstack-data/cache
