@@ -25,7 +25,7 @@ class ProductService(private val productRepository: ProductRepository) {
     fun updateProduct(productId: String, updatedProduct: Product): Product? {
         val existingProduct = productRepository.findById(productId) ?: return null
         
-        updatedProduct.setProductId(productId)
+        updatedProduct.productId = productId
         updatedProduct.createdAt = existingProduct.createdAt
         updatedProduct.updatedAt = Instant.now()
         

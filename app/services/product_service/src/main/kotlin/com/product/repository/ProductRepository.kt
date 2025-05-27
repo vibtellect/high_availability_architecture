@@ -24,8 +24,8 @@ class ProductRepository(private val dynamoDbEnhancedClient: DynamoDbEnhancedClie
     }
 
     fun save(product: Product): Product {
-        if (product.getProductId().isEmpty()) {
-            product.setProductId(UUID.randomUUID().toString())
+        if (product.productId.isEmpty()) {
+            product.productId = UUID.randomUUID().toString()
         }
         table.putItem(product)
         return product

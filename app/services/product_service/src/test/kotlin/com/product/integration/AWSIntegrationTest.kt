@@ -8,6 +8,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
+import java.math.BigDecimal
 
 @SpringBootTest
 @ActiveProfiles("aws")
@@ -23,7 +24,7 @@ class AWSIntegrationTest {
         val product = Product(
             name = "AWS Test Product",
             description = "Testing with real AWS",
-            price = 99.99,
+            price = BigDecimal("99.99"),
             inventoryCount = 5,
             category = "Test"
         )

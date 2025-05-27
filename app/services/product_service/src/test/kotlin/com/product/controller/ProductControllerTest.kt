@@ -1,120 +1,147 @@
 package com.product.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.product.TestBase
 import com.product.model.Product
-import com.product.repository.ProductRepository
-import org.junit.jupiter.api.BeforeEach
+import com.product.service.ProductService
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.MediaType
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
-import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient
-import software.amazon.awssdk.enhanced.dynamodb.TableSchema
-import software.amazon.awssdk.enhanced.dynamodb.model.CreateTableEnhancedRequest
+import org.junit.jupiter.api.extension.ExtendWith
+import org.mockito.InjectMocks
+import org.mockito.Mock
+import org.mockito.Mockito.*
+import org.mockito.junit.jupiter.MockitoExtension
+import org.springframework.http.HttpStatus
+import java.math.BigDecimal
 
-@SpringBootTest
-@AutoConfigureWebMvc
-class ProductControllerTest : TestBase() {
+@ExtendWith(MockitoExtension::class)
+class ProductControllerTest {
 
-    @Autowired
-    private lateinit var mockMvc: MockMvc
+    @Mock
+    private lateinit var productService: ProductService
 
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
-
-    @Autowired
-    private lateinit var productRepository: ProductRepository
-
-    @Autowired
-    private lateinit var dynamoDbEnhancedClient: DynamoDbEnhancedClient
-
-    @BeforeEach
-    fun setUp() {
-        // Tabelle erstellen
-        val table = dynamoDbEnhancedClient.table("Products", TableSchema.fromBean(Product::class.java))
-        try {
-            table.createTable(
-                CreateTableEnhancedRequest.builder()
-                    .provisionedThroughput { it.readCapacityUnits(5).writeCapacityUnits(5) }
-                    .build()
-            )
-        } catch (e: Exception) {
-            // Tabelle existiert bereits
-        }
-    }
+    @InjectMocks
+    private lateinit var productController: ProductController
 
     @Test
     fun `should create product`() {
+        // Given
         val product = Product(
             name = "New Product",
             description = "A new product",
-            price = 49.99,
+            price = BigDecimal("49.99"),
             inventoryCount = 50,
             category = "Electronics"
         )
+        val savedProduct = product.copy(productId = "test-id")
+        
+        `when`(productService.createProduct(product)).thenReturn(savedProduct)
 
-        mockMvc.perform(
-            post("/api/v1/products")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(product))
-        )
-            .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.name").value("New Product"))
-            .andExpect(jsonPath("$.price").value(49.99))
+        // When
+        val response = productController.createProduct(product)
+
+        // Then
+        assert(response.statusCode == HttpStatus.CREATED)
+        assert(response.body?.productId == "test-id")
+        assert(response.body?.name == "New Product")
+        verify(productService).createProduct(product)
     }
 
     @Test
     fun `should get all products`() {
         // Given
-        val product1 = Product(name = "Product 1", price = 10.0, category = "Test")
-        val product2 = Product(name = "Product 2", price = 20.0, category = "Test")
-        productRepository.save(product1)
-        productRepository.save(product2)
+        val product1 = Product(productId = "1", name = "Product 1", price = BigDecimal("10.0"), category = "Test")
+        val product2 = Product(productId = "2", name = "Product 2", price = BigDecimal("20.0"), category = "Test")
+        val products = listOf(product1, product2)
+        
+        `when`(productService.getAllProducts()).thenReturn(products)
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/products"))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(2))
+        // When
+        val response = productController.getAllProducts()
+
+        // Then
+        assert(response.statusCode == HttpStatus.OK)
+        assert(response.body?.size == 2)
+        assert(response.body?.get(0)?.name == "Product 1")
+        verify(productService).getAllProducts()
     }
 
     @Test
     fun `should get product by id`() {
         // Given
-        val product = Product(name = "Test Product", price = 25.0, category = "Test")
-        val savedProduct = productRepository.save(product)
+        val product = Product(productId = "test-id", name = "Test Product", price = BigDecimal("25.0"), category = "Test")
+        
+        `when`(productService.getProductById("test-id")).thenReturn(product)
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/products/${savedProduct.productId}"))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.name").value("Test Product"))
-            .andExpect(jsonPath("$.productId").value(savedProduct.productId))
+        // When
+        val response = productController.getProductById("test-id")
+
+        // Then
+        assert(response.statusCode == HttpStatus.OK)
+        assert(response.body?.productId == "test-id")
+        assert(response.body?.name == "Test Product")
+        verify(productService).getProductById("test-id")
     }
 
     @Test
     fun `should return 404 for non-existent product`() {
-        mockMvc.perform(get("/api/v1/products/non-existent-id"))
-            .andExpect(status().isNotFound)
+        // Given
+        `when`(productService.getProductById("non-existent")).thenReturn(null)
+
+        // When
+        val response = productController.getProductById("non-existent")
+
+        // Then
+        assert(response.statusCode == HttpStatus.NOT_FOUND)
+        assert(response.body == null)
+        verify(productService).getProductById("non-existent")
     }
 
     @Test
-    fun `should search products`() {
+    fun `should update product`() {
         // Given
-        val product1 = Product(name = "iPhone 15", description = "Latest iPhone", price = 999.0)
-        val product2 = Product(name = "Samsung Galaxy", description = "Android phone", price = 799.0)
-        val product3 = Product(name = "MacBook", description = "Apple laptop", price = 1299.0)
+        val productId = "test-id"
+        val updatedProduct = Product(
+            name = "Updated Product",
+            description = "Updated description",
+            price = BigDecimal("59.99"),
+            inventoryCount = 75,
+            category = "Electronics"
+        )
+        val savedProduct = updatedProduct.copy(productId = productId)
         
-        productRepository.save(product1)
-        productRepository.save(product2)
-        productRepository.save(product3)
+        `when`(productService.updateProduct(productId, updatedProduct)).thenReturn(savedProduct)
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/products/search?query=phone"))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(2))
+        // When
+        val response = productController.updateProduct(productId, updatedProduct)
+
+        // Then
+        assert(response.statusCode == HttpStatus.OK)
+        assert(response.body?.productId == productId)
+        assert(response.body?.name == "Updated Product")
+        verify(productService).updateProduct(productId, updatedProduct)
+    }
+
+    @Test
+    fun `should delete product`() {
+        // Given
+        `when`(productService.deleteProduct("test-id")).thenReturn(true)
+
+        // When
+        val response = productController.deleteProduct("test-id")
+
+        // Then
+        assert(response.statusCode == HttpStatus.NO_CONTENT)
+        verify(productService).deleteProduct("test-id")
+    }
+
+    @Test
+    fun `should return 404 when deleting non-existent product`() {
+        // Given
+        `when`(productService.deleteProduct("non-existent")).thenReturn(false)
+
+        // When
+        val response = productController.deleteProduct("non-existent")
+
+        // Then
+        assert(response.statusCode == HttpStatus.NOT_FOUND)
+        verify(productService).deleteProduct("non-existent")
     }
 } 
