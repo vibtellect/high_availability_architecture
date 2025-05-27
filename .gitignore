@@ -629,3 +629,4 @@ tasks/
 
 scripts/
 plannung/
+localstack-data/*
