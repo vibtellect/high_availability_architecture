@@ -23,7 +23,7 @@ type CartService struct {
 func NewCartService(cartRepo *db.CartRepository, logger *logrus.Logger) *CartService {
 	productBaseURL := os.Getenv("PRODUCT_SERVICE_URL")
 	if productBaseURL == "" {
-		productBaseURL = "http://localhost:8082" // Default for local development
+		productBaseURL = "http://localhost:8080" // Default for local development
 	}
 
 	return &CartService{

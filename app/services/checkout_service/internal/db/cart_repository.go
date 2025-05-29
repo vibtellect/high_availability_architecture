@@ -124,13 +124,14 @@ func (r *CartRepository) DeleteCart(ctx context.Context, userID string) error {
 
 // ClearCart removes all items from a cart but keeps the cart record
 func (r *CartRepository) ClearCart(ctx context.Context, userID string) error {
-	cart := &models.Cart{
-		UserID:    userID,
-		Items:     []models.CartItem{},
-		Total:     0,
-		CreatedAt: time.Now(), // Will be preserved in SaveCart if it exists
-		UpdatedAt: time.Now(),
+	cart, err := r.GetCart(ctx, userID)
+	if err != nil {
+		return err
 	}
 
+	// preserve original CreatedAt
+	cart.Items = []models.CartItem{}
+	cart.Total = 0
+
 	return r.SaveCart(ctx, cart)
-} 
+}

@@ -8,6 +8,7 @@ import (
 	"checkout_service/internal/db"
 	"checkout_service/internal/models"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,8 +57,10 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod st
 
 	// Create order
 	order := &models.Order{
+		OrderID:       generateOrderID(), // Add UUID generation
 		UserID:        userID,
 		Items:         orderItems,
+		TotalAmount:   calculateTotal(orderItems), // Add total calculation
 		Status:        models.OrderStatusPending,
 		PaymentStatus: models.PaymentStatusPending,
 		PaymentMethod: paymentMethod,
@@ -307,4 +310,18 @@ func (s *OrderService) canCancelOrder(status models.OrderStatus) bool {
 	}
 
 	return false
+}
+
+// generateOrderID creates a new UUID for order ID
+func generateOrderID() string {
+	return uuid.New().String()
+}
+
+// calculateTotal calculates the total amount from order items
+func calculateTotal(items []models.OrderItem) float64 {
+	total := 0.0
+	for _, item := range items {
+		total += item.Subtotal
+	}
+	return total
 } 

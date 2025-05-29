@@ -56,11 +56,15 @@ func main() {
 	// Create Gin router with default middleware (Logger and Recovery)
 	router := gin.Default()
 
-	// Add CORS middleware
-	router.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+// Add CORS middleware
+     router.Use(func(c *gin.Context) {
+        allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+        if allowedOrigins == "" {
+            allowedOrigins = "*" // Default for development
+        }
+        c.Header("Access-Control-Allow-Origin", allowedOrigins)
+         c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+         c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
