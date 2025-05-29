@@ -674,4 +674,6 @@ tasks/
 
 scripts/
 plannung/
-localstack-data/*
+
+# LocalStack data directory (development only)
+localstack-data/
