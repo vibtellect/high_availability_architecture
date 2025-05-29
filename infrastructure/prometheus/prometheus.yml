@@ -43,7 +43,7 @@ scrape_configs:
   # Redis
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['redis-exporter:9121']
     scrape_interval: 30s
 
   # LocalStack
