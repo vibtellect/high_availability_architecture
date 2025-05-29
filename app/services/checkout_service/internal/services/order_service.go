@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+)
+
+// Error definitions
+var (
+	ErrOrderNotFound           = errors.New("order not found")
+	ErrOrderNotCancellable     = errors.New("order cannot be cancelled in current status")
+	ErrPaymentAlreadyProcessed = errors.New("payment already processed")
+	ErrCartEmpty               = errors.New("cannot create order: cart is empty")
+	ErrInvalidStatusTransition = errors.New("invalid status transition")
 )
 
 type OrderService struct {
@@ -38,7 +48,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod st
 	}
 
 	if len(cart.Items) == 0 {
-		return nil, fmt.Errorf("cannot create order: cart is empty")
+		return nil, ErrCartEmpty
 	}
 
 	// Create order items from cart items
@@ -96,7 +106,7 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*models.Or
 	}
 
 	if order == nil {
-		return nil, fmt.Errorf("order not found")
+		return nil, ErrOrderNotFound
 	}
 
 	return order, nil
@@ -116,12 +126,12 @@ func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, st
 	}
 
 	if existingOrder == nil {
-		return nil, fmt.Errorf("order not found")
+		return nil, ErrOrderNotFound
 	}
 
 	// Validate status transition
 	if !s.isValidStatusTransition(existingOrder.Status, status) {
-		return nil, fmt.Errorf("invalid status transition from %s to %s", existingOrder.Status, status)
+		return nil, fmt.Errorf("%w: from %s to %s", ErrInvalidStatusTransition, existingOrder.Status, status)
 	}
 
 	// Update status
@@ -154,7 +164,7 @@ func (s *OrderService) UpdatePaymentStatus(ctx context.Context, orderID string, 
 	}
 
 	if existingOrder == nil {
-		return fmt.Errorf("order not found")
+		return ErrOrderNotFound
 	}
 
 	// Update payment status
@@ -189,11 +199,11 @@ func (s *OrderService) CancelOrder(ctx context.Context, orderID string) (*models
 	}
 
 	if existingOrder == nil {
-		return nil, fmt.Errorf("order not found")
+		return nil, ErrOrderNotFound
 	}
 
 	if !s.canCancelOrder(existingOrder.Status) {
-		return nil, fmt.Errorf("order cannot be cancelled in current status")
+		return nil, ErrOrderNotCancellable
 	}
 
 	// Update status to cancelled
@@ -226,11 +236,11 @@ func (s *OrderService) ProcessPayment(ctx context.Context, orderID string) (*mod
 	}
 
 	if existingOrder == nil {
-		return nil, fmt.Errorf("order not found")
+		return nil, ErrOrderNotFound
 	}
 
 	if existingOrder.PaymentStatus != models.PaymentStatusPending {
-		return nil, fmt.Errorf("payment already processed")
+		return nil, ErrPaymentAlreadyProcessed
 	}
 
 	// Simulate payment processing delay

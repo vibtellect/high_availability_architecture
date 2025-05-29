@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -290,7 +291,8 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		h.logger.WithError(err).WithField("orderId", orderID).Error("Failed to cancel order")
 
 		// Check if it's a validation error (order cannot be cancelled)
-		if err.Error() == "order cannot be cancelled in current status" {
+		// Check if it's a validation error (order cannot be cancelled)
+		if errors.Is(err, services.ErrOrderNotCancellable) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Order cannot be cancelled in its current status",
 			})
@@ -352,14 +354,14 @@ func (h *OrderHandler) ProcessPayment(c *gin.Context) {
 		h.logger.WithError(err).WithField("orderId", orderID).Error("Failed to process payment")
 
 		// Check for specific error types
-		if err.Error() == "order not found" {
+		if errors.Is(err, services.ErrOrderNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Order not found",
 			})
 			return
 		}
 
-		if err.Error() == "payment already processed" {
+		if errors.Is(err, services.ErrPaymentAlreadyProcessed) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Payment has already been processed for this order",
 			})
