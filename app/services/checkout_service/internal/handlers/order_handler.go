@@ -226,14 +226,15 @@ func (h *OrderHandler) ProcessPayment(c *gin.Context) {
 		h.logger.WithError(err).WithField("orderId", orderID).Error("Failed to process payment")
 		
 		// Check for specific error types
-		if err.Error() == "order not found" {
+		// Check for specific error types
+		if errors.Is(err, services.ErrOrderNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Order not found",
 			})
 			return
 		}
 		
-		if err.Error() == "payment already processed" {
+		if errors.Is(err, services.ErrPaymentAlreadyProcessed) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Payment has already been processed for this order",
 			})
