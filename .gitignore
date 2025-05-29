@@ -621,6 +621,51 @@ $RECYCLE.BIN/
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
 
+# ================================
+# Go / Golang
+# ================================
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dependency directories 
+vendor/
+
+# Go module download cache (optional - some prefer to keep this)
+# go.sum
+
+# Air live reload tool
+tmp/
+
+# Delve debugger
+__debug_bin
+
+# Binary output (Go service executables)
+/main
+/app
+checkout_service
+product_service
+user_service
+
+# ================================
+# Project Specific
+# ================================
 .roo*
 .task*
 .cursor*

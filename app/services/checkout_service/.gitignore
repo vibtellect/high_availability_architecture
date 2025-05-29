@@ -8,18 +8,25 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Code coverage profiles and other test artifacts
 *.out
+coverage.*
+*.coverprofile
+profile.cov
 
 # Dependency directories (remove the comment below to include it)
 vendor/
 
 # Go workspace file
 go.work
+go.work.sum
 
 # Environment variables
 .env
 .env.local
+.env.development
+.env.test
+.env.production
 
 # IDE files
 .vscode/
@@ -42,4 +49,10 @@ Thumbs.db
 
 # Binary
 main
-checkout_service 
+checkout_service
+
+# Go module download cache
+go.sum
+
+# Air live reload tool
+tmp/ 
