@@ -183,7 +183,8 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		h.logger.WithError(err).WithField("orderId", orderID).Error("Failed to cancel order")
 		
 		// Check if it's a validation error (order cannot be cancelled)
-		if err.Error() == "order cannot be cancelled in current status" {
+		// Check if it's a validation error (order cannot be cancelled)
+		if errors.Is(err, services.ErrOrderNotCancellable) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Order cannot be cancelled in its current status",
 			})
