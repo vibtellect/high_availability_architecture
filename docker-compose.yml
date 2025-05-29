@@ -3,24 +3,31 @@ version: '3.8'
 services:
   # LocalStack für AWS Services (DynamoDB, SNS, SQS, etc.)
   localstack:
-    image: localstack/localstack
+    image: localstack/localstack:latest
     container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
     ports:
       - "4566:4566"  # LocalStack main port
       - "8000:4566"  # DynamoDB port mapping für compatibility
     environment:
-      - SERVICES=dynamodb,sns,sqs,s3,lambda
+      - SERVICES=dynamodb,sns,sqs,s3,lambda,apigateway,iam,cloudwatch
       - DEBUG=1
       - DATA_DIR=/var/lib/localstack
       - DOCKER_HOST=unix:///var/run/docker.sock
       - PERSISTENCE=1
+      - EAGER_SERVICE_LOADING=1
     volumes:
       - "./localstack-data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       - microservices-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
 
-  # Product Service
+  # Product Service - Kotlin
   product-service:
     build:
       context: ./app/services/product_service
@@ -34,13 +41,21 @@ services:
       - AWS_REGION=eu-central-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
+      - LOGGING_LEVEL_ROOT=INFO
+      - LOGGING_LEVEL_COM_EXAMPLE=DEBUG
     depends_on:
-      - localstack
+      localstack:
+        condition: service_healthy
     networks:
       - microservices-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # User Service
+  # User Service - Java
   user-service:
     build:
       context: ./app/services/user_service
@@ -56,8 +71,126 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - JWT_SECRET=myVerySecretKeyForJWTTokenGenerationThatShouldBeAtLeast256BitsLong
       - JWT_EXPIRATION=86400000
+      - LOGGING_LEVEL_ROOT=INFO
     depends_on:
-      - localstack
+      localstack:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Checkout Service - Go
+  checkout-service:
+    build:
+      context: ./app/services/checkout_service
+      dockerfile: Dockerfile
+    container_name: checkout-service
+    ports:
+      - "8082:8082"
+    environment:
+      - GIN_MODE=release
+      - PORT=8082
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - PRODUCT_SERVICE_URL=http://product-service:8080
+      - USER_SERVICE_URL=http://user-service:8081
+    depends_on:
+      localstack:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for Caching
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # NGINX Load Balancer / API Gateway
+  nginx:
+    image: nginx:alpine
+    container_name: api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - product-service
+      - user-service
+      - checkout-service
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Grafana for Monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  # Prometheus for Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
     networks:
       - microservices-network
     restart: unless-stopped
@@ -65,6 +198,12 @@ services:
 networks:
   microservices-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
-  localstack-data: 
+  localstack-data:
+  redis-data:
+  grafana-data:
+  prometheus-data: 
