@@ -50,6 +50,9 @@ dependencies {
     
     // Configuration processor
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    // Prometheus Metrics
+    implementation 'io.micrometer:micrometer-registry-prometheus'
     
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

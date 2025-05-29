@@ -45,6 +45,9 @@ dependencies {
 	testImplementation("org.testcontainers:junit-jupiter:1.19.3")
 	testImplementation("org.testcontainers:localstack:1.19.3")
 	testImplementation("software.amazon.awssdk:dynamodb:2.21.29")
+
+	// Prometheus Metrics
+    implementation("io.micrometer:micrometer-registry-prometheus")
 }
 
 tasks.withType<KotlinCompile> {

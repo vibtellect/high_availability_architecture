@@ -12,6 +12,8 @@ import (
 	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/db"
 	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/handlers"
 	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/middleware"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // RouterConfig holds the configuration and dependencies for router setup
@@ -54,6 +56,9 @@ func SetupRouter(routerConfig *RouterConfig) *gin.Engine {
 
 	// Health check endpoint
 	router.GET("/health", createHealthHandler(routerConfig))
+
+	// Prometheus metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Hello World endpoint
 	router.GET("/", createRootHandler(cfg, routerConfig.Logger, routerConfig.IsTestMode))
