@@ -1,0 +1,310 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"checkout_service/internal/db"
+	"checkout_service/internal/models"
+
+	"github.com/sirupsen/logrus"
+)
+
+type OrderService struct {
+	orderRepo   *db.OrderRepository
+	cartRepo    *db.CartRepository
+	cartService *CartService
+	logger      *logrus.Logger
+}
+
+// NewOrderService creates a new order service
+func NewOrderService(orderRepo *db.OrderRepository, cartRepo *db.CartRepository, cartService *CartService, logger *logrus.Logger) *OrderService {
+	return &OrderService{
+		orderRepo:   orderRepo,
+		cartRepo:    cartRepo,
+		cartService: cartService,
+		logger:      logger,
+	}
+}
+
+// CreateOrder creates a new order from the user's cart
+func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod string) (*models.Order, error) {
+	// Get cart contents
+	cart, err := s.cartRepo.GetCart(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(cart.Items) == 0 {
+		return nil, fmt.Errorf("cannot create order: cart is empty")
+	}
+
+	// Create order items from cart items
+	var orderItems []models.OrderItem
+	for _, cartItem := range cart.Items {
+		orderItem := models.OrderItem{
+			ProductID:   cartItem.ProductID,
+			ProductName: cartItem.ProductName,
+			Price:       cartItem.Price,
+			Quantity:    cartItem.Quantity,
+			Category:    cartItem.Category,
+			Subtotal:    cartItem.Price * float64(cartItem.Quantity),
+		}
+		orderItems = append(orderItems, orderItem)
+	}
+
+	// Create order
+	order := &models.Order{
+		UserID:        userID,
+		Items:         orderItems,
+		Status:        models.OrderStatusPending,
+		PaymentStatus: models.PaymentStatusPending,
+		PaymentMethod: paymentMethod,
+	}
+
+	// Save order
+	err = s.orderRepo.CreateOrder(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clear cart after successful order creation
+	err = s.cartRepo.ClearCart(ctx, userID)
+	if err != nil {
+		s.logger.WithError(err).WithField("userId", userID).Warn("Failed to clear cart after order creation")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"orderId":     order.OrderID,
+		"userId":      order.UserID,
+		"totalAmount": order.TotalAmount,
+		"itemCount":   len(order.Items),
+	}).Info("Order created successfully")
+
+	return order, nil
+}
+
+// GetOrder retrieves an order by ID
+func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*models.Order, error) {
+	order, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	if order == nil {
+		return nil, fmt.Errorf("order not found")
+	}
+
+	return order, nil
+}
+
+// GetOrdersByUser retrieves all orders for a user
+func (s *OrderService) GetOrdersByUser(ctx context.Context, userID string) ([]models.Order, error) {
+	return s.orderRepo.GetOrdersByUser(ctx, userID)
+}
+
+// UpdateOrderStatus updates the status of an order
+func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, status models.OrderStatus) (*models.Order, error) {
+	// Verify order exists
+	existingOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existingOrder == nil {
+		return nil, fmt.Errorf("order not found")
+	}
+
+	// Validate status transition
+	if !s.isValidStatusTransition(existingOrder.Status, status) {
+		return nil, fmt.Errorf("invalid status transition from %s to %s", existingOrder.Status, status)
+	}
+
+	// Update status
+	err = s.orderRepo.UpdateOrderStatus(ctx, orderID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"orderId":   orderID,
+		"oldStatus": existingOrder.Status,
+		"newStatus": status,
+	}).Info("Order status updated")
+
+	// Get updated order to return
+	updatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedOrder, nil
+}
+
+// UpdatePaymentStatus updates the payment status of an order
+func (s *OrderService) UpdatePaymentStatus(ctx context.Context, orderID string, paymentStatus models.PaymentStatus) error {
+	// Verify order exists
+	existingOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return err
+	}
+
+	if existingOrder == nil {
+		return fmt.Errorf("order not found")
+	}
+
+	// Update payment status
+	err = s.orderRepo.UpdatePaymentStatus(ctx, orderID, paymentStatus)
+	if err != nil {
+		return err
+	}
+
+	// Auto-update order status based on payment status
+	if paymentStatus == models.PaymentStatusCompleted && existingOrder.Status == models.OrderStatusPending {
+		err = s.orderRepo.UpdateOrderStatus(ctx, orderID, models.OrderStatusConfirmed)
+		if err != nil {
+			s.logger.WithError(err).WithField("orderId", orderID).Warn("Failed to auto-update order status after payment completion")
+		}
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"orderId":           orderID,
+		"oldPaymentStatus":  existingOrder.PaymentStatus,
+		"newPaymentStatus":  paymentStatus,
+	}).Info("Payment status updated")
+
+	return nil
+}
+
+// CancelOrder cancels an order
+func (s *OrderService) CancelOrder(ctx context.Context, orderID string) (*models.Order, error) {
+	// Verify order exists and can be cancelled
+	existingOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existingOrder == nil {
+		return nil, fmt.Errorf("order not found")
+	}
+
+	if !s.canCancelOrder(existingOrder.Status) {
+		return nil, fmt.Errorf("order cannot be cancelled in current status")
+	}
+
+	// Update status to cancelled
+	err = s.orderRepo.UpdateOrderStatus(ctx, orderID, models.OrderStatusCancelled)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"orderId":   orderID,
+		"userId":    existingOrder.UserID,
+		"oldStatus": existingOrder.Status,
+	}).Info("Order cancelled")
+
+	// Get updated order to return
+	updatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedOrder, nil
+}
+
+// ProcessPayment simulates payment processing
+func (s *OrderService) ProcessPayment(ctx context.Context, orderID string) (*models.Order, error) {
+	// Verify order exists
+	existingOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existingOrder == nil {
+		return nil, fmt.Errorf("order not found")
+	}
+
+	if existingOrder.PaymentStatus != models.PaymentStatusPending {
+		return nil, fmt.Errorf("payment already processed")
+	}
+
+	// Simulate payment processing delay
+	time.Sleep(100 * time.Millisecond)
+
+	// For demo purposes, randomly succeed/fail payment (90% success rate)
+	// In real implementation, this would integrate with payment gateway
+	success := true // Simplified for demo
+
+	if success {
+		err = s.UpdatePaymentStatus(ctx, orderID, models.PaymentStatusCompleted)
+	} else {
+		err = s.UpdatePaymentStatus(ctx, orderID, models.PaymentStatusFailed)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Get updated order to return
+	updatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedOrder, nil
+}
+
+// isValidStatusTransition validates if a status transition is allowed
+func (s *OrderService) isValidStatusTransition(currentStatus, newStatus models.OrderStatus) bool {
+	transitions := map[models.OrderStatus][]models.OrderStatus{
+		models.OrderStatusPending: {
+			models.OrderStatusConfirmed,
+			models.OrderStatusCancelled,
+		},
+		models.OrderStatusConfirmed: {
+			models.OrderStatusProcessing,
+			models.OrderStatusCancelled,
+		},
+		models.OrderStatusProcessing: {
+			models.OrderStatusShipped,
+			models.OrderStatusCancelled,
+		},
+		models.OrderStatusShipped: {
+			models.OrderStatusDelivered,
+		},
+		models.OrderStatusDelivered: {}, // Final state
+		models.OrderStatusCancelled: {}, // Final state
+	}
+
+	allowedTransitions, exists := transitions[currentStatus]
+	if !exists {
+		return false
+	}
+
+	for _, allowed := range allowedTransitions {
+		if allowed == newStatus {
+			return true
+		}
+	}
+
+	return false
+}
+
+// canCancelOrder checks if an order can be cancelled
+func (s *OrderService) canCancelOrder(status models.OrderStatus) bool {
+	cancellableStatuses := []models.OrderStatus{
+		models.OrderStatusPending,
+		models.OrderStatusConfirmed,
+		models.OrderStatusProcessing,
+	}
+
+	for _, cancellable := range cancellableStatuses {
+		if status == cancellable {
+			return true
+		}
+	}
+
+	return false
+} 
