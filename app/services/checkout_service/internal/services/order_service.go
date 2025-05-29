@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"checkout_service/internal/db"
-	"checkout_service/internal/models"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/db"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/models"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -172,9 +172,9 @@ func (s *OrderService) UpdatePaymentStatus(ctx context.Context, orderID string, 
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"orderId":           orderID,
-		"oldPaymentStatus":  existingOrder.PaymentStatus,
-		"newPaymentStatus":  paymentStatus,
+		"orderId":          orderID,
+		"oldPaymentStatus": existingOrder.PaymentStatus,
+		"newPaymentStatus": paymentStatus,
 	}).Info("Payment status updated")
 
 	return nil
@@ -324,4 +324,4 @@ func calculateTotal(items []models.OrderItem) float64 {
 		total += item.Subtotal
 	}
 	return total
-} 
+}

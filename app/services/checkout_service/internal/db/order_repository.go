@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"checkout_service/internal/models"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/models"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -114,7 +114,7 @@ func (r *OrderRepository) GetOrder(ctx context.Context, orderID string) (*models
 // GetOrdersByUser retrieves all orders for a specific user
 func (r *OrderRepository) GetOrdersByUser(ctx context.Context, userID string) ([]models.Order, error) {
 	input := &dynamodb.ScanInput{
-		TableName: aws.String(OrderTableName),
+		TableName:        aws.String(OrderTableName),
 		FilterExpression: aws.String("userId = :userId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":userId": &types.AttributeValueMemberS{Value: userID},
@@ -228,4 +228,4 @@ func (r *OrderRepository) DeleteOrder(ctx context.Context, orderID string) error
 
 	r.logger.WithField("orderId", orderID).Info("Order deleted successfully")
 	return nil
-} 
+}

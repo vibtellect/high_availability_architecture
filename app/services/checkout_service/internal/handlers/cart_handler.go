@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"checkout_service/internal/models"
-	"checkout_service/internal/services"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/models"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/services"
 )
 
 type CartHandler struct {
@@ -53,7 +53,7 @@ func (h *CartHandler) AddToCart(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Warn("Invalid add to cart request")
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
+			"error":   "Invalid request format",
 			"details": err.Error(),
 		})
 		return
@@ -66,7 +66,7 @@ func (h *CartHandler) AddToCart(c *gin.Context) {
 			"productId": req.ProductID,
 			"quantity":  req.Quantity,
 		}).Error("Failed to add item to cart")
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to add item to cart",
 		})
@@ -98,7 +98,7 @@ func (h *CartHandler) UpdateCartItem(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Warn("Invalid update cart item request")
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
+			"error":   "Invalid request format",
 			"details": err.Error(),
 		})
 		return
@@ -111,7 +111,7 @@ func (h *CartHandler) UpdateCartItem(c *gin.Context) {
 			"productId": req.ProductID,
 			"quantity":  req.Quantity,
 		}).Error("Failed to update cart item")
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to update cart item",
 		})
@@ -132,7 +132,7 @@ func (h *CartHandler) UpdateCartItem(c *gin.Context) {
 func (h *CartHandler) RemoveFromCart(c *gin.Context) {
 	userID := c.Param("userId")
 	productID := c.Param("productId")
-	
+
 	if userID == "" || productID == "" {
 		h.logger.Warn("Missing userId or productId parameter")
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -147,7 +147,7 @@ func (h *CartHandler) RemoveFromCart(c *gin.Context) {
 			"userId":    userID,
 			"productId": productID,
 		}).Error("Failed to remove item from cart")
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to remove item from cart",
 		})
@@ -213,4 +213,4 @@ func (h *CartHandler) GetCheckoutSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, summary)
-} 
+}

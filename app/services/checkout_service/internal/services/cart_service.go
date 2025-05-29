@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"checkout_service/internal/db"
-	"checkout_service/internal/models"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/db"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/models"
 
 	"github.com/sirupsen/logrus"
 )
@@ -190,8 +190,8 @@ func (s *CartService) GetCheckoutSummary(ctx context.Context, userID string) (*m
 	}
 
 	subtotal := cart.Total
-	tax := subtotal * 0.08     // 8% tax rate
-	shipping := 5.99           // Fixed shipping rate
+	tax := subtotal * 0.08 // 8% tax rate
+	shipping := 5.99       // Fixed shipping rate
 	total := subtotal + tax + shipping
 
 	summary := &models.CheckoutSummary{
@@ -210,7 +210,7 @@ func (s *CartService) GetCheckoutSummary(ctx context.Context, userID string) (*m
 // getProductDetails fetches product details from product service
 func (s *CartService) getProductDetails(productID string) (*models.Product, error) {
 	url := fmt.Sprintf("%s/api/v1/products/%s", s.productBaseURL, productID)
-	
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call product service: %w", err)
@@ -232,4 +232,4 @@ func (s *CartService) getProductDetails(productID string) (*models.Product, erro
 	}
 
 	return &product, nil
-} 
+}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"checkout_service/internal/models"
+	"github.com/vibtellect/high_availability_architecture/app/services/checkout_service/internal/models"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
