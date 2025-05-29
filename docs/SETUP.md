@@ -94,6 +94,8 @@ Auto-created tables via LocalStack:
 - `Carts` - Shopping carts
 - `Orders` - Order history
 
+**Note**: LocalStack data is stored in the `localstack-data/` directory, which is automatically created and should not be committed to version control.
+
 ### Manual Table Management
 ```bash
 # Access LocalStack container
