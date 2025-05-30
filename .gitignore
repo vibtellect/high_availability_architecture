@@ -657,11 +657,8 @@ tmp/
 __debug_bin
 
 # Binary output (Go service executables)
-/main
-/app
-checkout_service
-product_service
-user_service
+/app/services/product_service/build/libs/product_service-0.0.1-SNAPSHOT.jar
+/app/services/user_service/build/libs/user_service-0.0.1-SNAPSHOT.jar
 
 # ================================
 # Project Specific
@@ -672,7 +669,8 @@ user_service
 tasks/
 .env.expample
 
-scripts/
+scripts/example_prd.txt
+scripts/prd.txt
 plannung/
 
 # LocalStack data directory (development only)

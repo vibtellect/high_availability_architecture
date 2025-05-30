@@ -25,8 +25,8 @@ cd high_availability_architecture
 # Start only infrastructure services
 docker-compose up localstack redis nginx -d
 
-# Initialize database
-./scripts/init-dynamodb.sh
+# Initialize LocalStack (SNS/SQS + DynamoDB)
+./scripts/setup-localstack.sh
 ```
 
 ### 2. Service Development
@@ -95,6 +95,7 @@ high_availability_architecture/
 ├── docs/                           # 📚 Documentation
 │   ├── SETUP.md                   # Setup guide
 │   ├── API.md                     # API documentation
+│   ├── SNS_SQS_ARCHITECTURE.md   # Event-driven architecture
 │   └── DEVELOPMENT.md             # This file
 ├── app/services/                  # 🏗️ Microservices
 │   ├── product_service/           # Kotlin/Spring Boot
@@ -102,6 +103,7 @@ high_availability_architecture/
 │   └── checkout_service/          # Go/Gin
 ├── infrastructure/                # 🔧 Infrastructure configs
 ├── scripts/                       # 📜 Helper scripts
+│   └── setup-localstack.sh       # SNS/SQS setup
 ├── docker-compose.yml            # 🐳 Container orchestration
 └── README.md                      # 📖 Main documentation
 ```
@@ -116,6 +118,12 @@ high_availability_architecture/
 APP_ENV=development
 AWS_REGION=eu-central-1
 AWS_DYNAMODB_ENDPOINT=http://localhost:4566
+AWS_SNS_ENDPOINT=http://localhost:4566
+
+# Event Publishing
+EVENTS_PRODUCT_ENABLED=true
+EVENTS_USER_ENABLED=true
+EVENTS_ENABLED=true
 
 # Service-specific (see individual service docs)
 ```
@@ -169,6 +177,52 @@ curl http://localhost:8081/api/v1/hello
 curl http://localhost:8082/health
 ```
 
+### Event-driven Testing
+
+Testing the SNS/SQS event system during development:
+
+```bash
+# 1. Ensure LocalStack is running and configured
+docker-compose up -d localstack
+./scripts/setup-localstack.sh
+
+# 2. Start a service (e.g., Product Service)
+docker-compose up -d product-service
+
+# 3. Trigger events via API calls
+curl -X POST "http://localhost:8080/api/v1/products" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Development Test Product",
+    "description": "Testing events during development",
+    "price": 99.99,
+    "inventoryCount": 5,
+    "category": "DEV_TEST"
+  }'
+
+# 4. Verify events in logs
+docker logs product-service --tail=10
+# Expected: "Published event PRODUCT_CREATED for product ... with messageId: ..."
+
+# 5. Check SQS queue for received messages
+docker exec localstack-main awslocal sqs receive-message \
+  --queue-url "http://sqs.eu-central-1.localhost.localstack.cloud:4566/000000000000/product-events-queue"
+
+# 6. Monitor event flow with debug commands
+docker exec localstack-main awslocal sns list-topics
+docker exec localstack-main awslocal sqs list-queues
+```
+
+#### Event Development Guidelines
+
+- **Always test events locally** before pushing code
+- **Check logs** for successful event publishing (INFO level messages with messageId)
+- **Verify SQS delivery** using LocalStack commands
+- **Use debug logging** for event troubleshooting (`LOGGING_LEVEL_COM_PRODUCT_EVENT=DEBUG`)
+- **Test edge cases** like service failures and retry logic
+
+For comprehensive event testing strategies, see [SNS_SQS_ARCHITECTURE.md](SNS_SQS_ARCHITECTURE.md).
+
 ## 📝 Code Standards
 
 ### Go (Checkout Service)
@@ -182,6 +236,13 @@ curl http://localhost:8082/health
 - Use Gradle for dependency management
 - Follow Spring Boot best practices
 - Minimum 80% test coverage
+
+### Event-driven Development Standards
+- **Event Schema**: Follow standardized event format (see [SNS_SQS_ARCHITECTURE.md](SNS_SQS_ARCHITECTURE.md))
+- **Error Handling**: Always implement graceful degradation for event failures
+- **Retry Logic**: Use exponential backoff with max attempts
+- **Logging**: Include event IDs and message IDs in logs for traceability
+- **Testing**: Test both successful publishing and failure scenarios
 
 ### General Guidelines
 - **Commit Messages**: Use [Conventional Commits](https://www.conventionalcommits.org/)

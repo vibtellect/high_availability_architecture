@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const CartTableName = "Carts"
+const CartTableName = "carts"
 
 type CartRepository struct {
 	client *DynamoDBClient

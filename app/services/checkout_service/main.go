@@ -46,13 +46,29 @@ func main() {
 		log.Info("DynamoDB connection established successfully")
 	}
 
+	// Initialize AWS configuration (SNS/SQS)
+	awsConfig, err := config.NewAWSConfig(log)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to initialize AWS configuration")
+	}
+
+	// Initialize event publisher
+	eventPublisher := services.NewEventPublisher(awsConfig, cfg, log)
+
+	// Test SNS connectivity
+	if err := eventPublisher.HealthCheck(ctx); err != nil {
+		log.WithError(err).Warn("SNS health check failed, but continuing startup")
+	} else {
+		log.Info("SNS connection established successfully")
+	}
+
 	// Initialize repositories
 	cartRepo := db.NewCartRepository(dynamoClient, log)
 	orderRepo := db.NewOrderRepository(dynamoClient, log)
 
-	// Initialize services
-	cartService := services.NewCartService(cartRepo, log)
-	orderService := services.NewOrderService(orderRepo, cartRepo, cartService, log)
+	// Initialize services with event publisher
+	cartService := services.NewCartService(cartRepo, eventPublisher, log)
+	orderService := services.NewOrderService(orderRepo, cartRepo, cartService, eventPublisher, log)
 
 	// Initialize handlers
 	cartHandler := handlers.NewCartHandler(cartService, log)

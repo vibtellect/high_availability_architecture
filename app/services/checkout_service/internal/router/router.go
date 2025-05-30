@@ -42,6 +42,13 @@ func SetupRouter(routerConfig *RouterConfig) *gin.Engine {
 	// Create Gin router with default middleware (Logger and Recovery)
 	router := gin.Default()
 
+	// Add Prometheus metrics middleware (early in the chain for accurate metrics)
+	if routerConfig.Logger != nil {
+		router.Use(middleware.PrometheusMiddlewareWithLogger(routerConfig.Logger))
+	} else {
+		router.Use(middleware.DefaultPrometheusMiddleware())
+	}
+
 	// Add request timeout middleware (before other middleware for proper coverage)
 	if routerConfig.Logger != nil {
 		router.Use(middleware.RequestTimeoutMiddlewareWithLogger(cfg.RequestTimeout, routerConfig.Logger))

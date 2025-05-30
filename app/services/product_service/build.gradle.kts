@@ -36,6 +36,13 @@ dependencies {
 	implementation("software.amazon.awssdk:dynamodb:2.21.29")
 	implementation("software.amazon.awssdk:dynamodb-enhanced:2.21.29")
 	
+	// AWS SNS/SQS for Event-driven Architecture
+	implementation("software.amazon.awssdk:sns:2.21.29")
+	implementation("software.amazon.awssdk:sqs:2.21.29")
+	
+	// Jackson for JSON processing (already implied by Kotlin module)
+	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+	
 	// Testing
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("com.ninja-squad:springmockk:4.0.2")

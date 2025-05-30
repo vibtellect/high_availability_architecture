@@ -3,23 +3,27 @@ version: '3.8'
 services:
   # LocalStack für AWS Services (DynamoDB, SNS, SQS, etc.)
   localstack:
-    image: localstack/localstack:latest
-    container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
+    container_name: localstack-main
+    image: localstack/localstack:3.5.0
     ports:
-      - "4566:4566"  # LocalStack main port
-      - "8000:4566"  # DynamoDB port mapping für compatibility
+      - "127.0.0.1:4566:4566"  # LocalStack main port
+      - "127.0.0.1:8000:4566"  # DynamoDB port mapping für compatibility
+      - "127.0.0.1:4510-4559:4510-4559"
     environment:
       - SERVICES=dynamodb,sns,sqs,s3,lambda,apigateway,iam,cloudwatch
-      - DEBUG=1
+      - DEBUG=${DEBUG:-0}
       - DATA_DIR=/var/lib/localstack
       - DOCKER_HOST=unix:///var/run/docker.sock
       - PERSISTENCE=1
       - EAGER_SERVICE_LOADING=1
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
     volumes:
       - "./localstack-data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - microservices-network
+      microservices-network:
+        # Set the container IP address in the 10.0.2.0/24 subnet
+        ipv4_address: 10.0.2.20
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 30s
@@ -38,16 +42,22 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_SNS_ENDPOINT=http://localstack:4566
       - AWS_REGION=eu-central-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - LOGGING_LEVEL_ROOT=INFO
-      - LOGGING_LEVEL_COM_EXAMPLE=DEBUG
+      - LOGGING_LEVEL_COM_PRODUCT=DEBUG
+      - LOGGING_LEVEL_COM_PRODUCT_EVENT=DEBUG
+      - LOGGING_LEVEL_COM_PRODUCT_SERVICE=DEBUG
+      - EVENTS_PRODUCT_ENABLED=true
     depends_on:
       localstack:
         condition: service_healthy
     networks:
       - microservices-network
+    dns:
+      - 10.0.2.20
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -66,17 +76,22 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
-      - AWS_REGION=us-east-1
+      - AWS_SNS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=eu-central-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - JWT_SECRET=myVerySecretKeyForJWTTokenGenerationThatShouldBeAtLeast256BitsLong
       - JWT_EXPIRATION=86400000
       - LOGGING_LEVEL_ROOT=INFO
+      - LOGGING_LEVEL_COM_USER=DEBUG
+      - EVENTS_USER_ENABLED=true
     depends_on:
       localstack:
         condition: service_healthy
     networks:
       - microservices-network
+    dns:
+      - 10.0.2.20
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
@@ -95,10 +110,13 @@ services:
     environment:
       - GIN_MODE=release
       - PORT=8082
-      - AWS_REGION=us-east-1
+      - AWS_REGION=eu-central-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_ENDPOINT=http://localstack:4566
+      - SNS_TOPIC_ARN=arn:aws:sns:eu-central-1:000000000000:checkout-events
+      - EVENTS_ENABLED=true
       - PRODUCT_SERVICE_URL=http://product-service:8080
       - USER_SERVICE_URL=http://user-service:8081
     depends_on:
@@ -110,9 +128,11 @@ services:
         condition: service_healthy
     networks:
       - microservices-network
+    dns:
+      - 10.0.2.20
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8082/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -200,7 +220,7 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 10.0.2.0/24
 
 volumes:
   localstack-data:

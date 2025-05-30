@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,18 @@ type Config struct {
 	DynamoDBRegion   string
 	DynamoDBEndpoint string // For local development
 
+	// AWS Configuration
+	AWSRegion          string
+	AWSEndpoint        string // For LocalStack
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	SNSTopicARN        string
+
+	// Event Publishing Configuration
+	EventsEnabled    bool
+	MaxRetryAttempts int
+	RetryDelay       time.Duration
+
 	// Service info
 	ServiceName    string
 	ServiceVersion string
@@ -52,6 +65,18 @@ func LoadConfig() *Config {
 		ServiceName:    "checkout-service",
 		ServiceVersion: "1.0.0",
 		DynamoDBRegion: "us-west-2",
+
+		// AWS defaults (LocalStack)
+		AWSRegion:          "eu-central-1",
+		AWSEndpoint:        "http://localhost:4566",
+		AWSAccessKeyID:     "test",
+		AWSSecretAccessKey: "test",
+		SNSTopicARN:        "arn:aws:sns:eu-central-1:000000000000:checkout-events",
+
+		// Event publishing defaults
+		EventsEnabled:    true,
+		MaxRetryAttempts: 3,
+		RetryDelay:       1 * time.Second,
 	}
 
 	// Load environment
@@ -100,6 +125,38 @@ func LoadConfig() *Config {
 		config.DynamoDBEndpoint = endpoint
 	}
 
+	// Load AWS configuration
+	if awsRegion := os.Getenv("AWS_REGION"); awsRegion != "" {
+		config.AWSRegion = awsRegion
+	}
+	if awsEndpoint := os.Getenv("AWS_ENDPOINT"); awsEndpoint != "" {
+		config.AWSEndpoint = awsEndpoint
+	}
+	if awsAccessKeyID := os.Getenv("AWS_ACCESS_KEY_ID"); awsAccessKeyID != "" {
+		config.AWSAccessKeyID = awsAccessKeyID
+	}
+	if awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY"); awsSecretAccessKey != "" {
+		config.AWSSecretAccessKey = awsSecretAccessKey
+	}
+	if snsTopicARN := os.Getenv("SNS_TOPIC_ARN"); snsTopicARN != "" {
+		config.SNSTopicARN = snsTopicARN
+	}
+
+	// Load event publishing configuration
+	if eventsEnabled := os.Getenv("EVENTS_ENABLED"); eventsEnabled != "" {
+		config.EventsEnabled = eventsEnabled == "true"
+	}
+	if maxRetryAttempts := os.Getenv("MAX_RETRY_ATTEMPTS"); maxRetryAttempts != "" {
+		if retryAttempts, err := strconv.Atoi(maxRetryAttempts); err == nil {
+			config.MaxRetryAttempts = retryAttempts
+		}
+	}
+	if retryDelay := os.Getenv("RETRY_DELAY"); retryDelay != "" {
+		if delay, err := time.ParseDuration(retryDelay); err == nil {
+			config.RetryDelay = delay
+		}
+	}
+
 	// Load service info
 	if name := os.Getenv("SERVICE_NAME"); name != "" {
 		config.ServiceName = name
@@ -124,6 +181,11 @@ func (c *Config) IsDevelopment() bool {
 // IsTesting returns true if running in testing environment
 func (c *Config) IsTesting() bool {
 	return c.Environment == Testing
+}
+
+// IsLocalStack returns true if using LocalStack endpoints
+func (c *Config) IsLocalStack() bool {
+	return strings.Contains(c.AWSEndpoint, "localhost") || strings.Contains(c.AWSEndpoint, "localstack")
 }
 
 // GetLogLevel returns the appropriate logrus log level

@@ -24,14 +24,18 @@ repositories {
 }
 
 dependencies {
+    // AWS SDK BOM (must be first)
+    implementation platform('software.amazon.awssdk:bom')
+    
     // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    
-    // AWS SDK for DynamoDB
-    implementation platform('software.amazon.awssdk:bom:2.29.15')
+
+    // AWS SDK Services (after BOM)
+    implementation 'software.amazon.awssdk:sns'
+    implementation 'software.amazon.awssdk:sqs'
     implementation 'software.amazon.awssdk:dynamodb'
     implementation 'software.amazon.awssdk:dynamodb-enhanced'
     

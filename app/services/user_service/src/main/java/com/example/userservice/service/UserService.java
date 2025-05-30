@@ -4,6 +4,7 @@ import com.example.userservice.dto.*;
 import com.example.userservice.model.User;
 import com.example.userservice.repository.UserRepository;
 import com.example.userservice.util.JwtUtil;
+import com.example.userservice.event.UserEventPublisher;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,12 +21,14 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final UserEventPublisher eventPublisher;
 
     @Autowired
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, UserEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.eventPublisher = eventPublisher;
     }
 
     public AuthResponse registerUser(UserRegistrationRequest request) {
@@ -52,6 +55,9 @@ public class UserService {
         
         // Save user
         User savedUser = userRepository.save(user);
+        
+        // Publish event
+        eventPublisher.publishUserRegistered(savedUser);
         
         // Generate JWT token
         String token = jwtUtil.generateToken(savedUser.getUsername());
@@ -162,6 +168,10 @@ public class UserService {
         user.updateTimestamp();
         
         User updatedUser = userRepository.save(user);
+        
+        // Publish event
+        eventPublisher.publishUserUpdated(updatedUser);
+        
         return new UserResponse(updatedUser);
     }
 
@@ -177,6 +187,9 @@ public class UserService {
         user.updateTimestamp();
         
         userRepository.save(user);
+        
+        // Publish event
+        eventPublisher.publishUserDeactivated(userId);
     }
 
     public void activateUser(String userId) {
@@ -199,6 +212,9 @@ public class UserService {
         }
         
         userRepository.deleteById(userId);
+        
+        // Publish event
+        eventPublisher.publishUserDeleted(userId);
     }
 
     public boolean validateToken(String token) {

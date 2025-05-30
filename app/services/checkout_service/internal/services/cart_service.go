@@ -15,12 +15,13 @@ import (
 
 type CartService struct {
 	cartRepo       *db.CartRepository
+	eventPublisher *EventPublisher
 	logger         *logrus.Logger
 	productBaseURL string
 }
 
 // NewCartService creates a new cart service
-func NewCartService(cartRepo *db.CartRepository, logger *logrus.Logger) *CartService {
+func NewCartService(cartRepo *db.CartRepository, eventPublisher *EventPublisher, logger *logrus.Logger) *CartService {
 	productBaseURL := os.Getenv("PRODUCT_SERVICE_URL")
 	if productBaseURL == "" {
 		productBaseURL = "http://localhost:8080" // Default for local development
@@ -28,6 +29,7 @@ func NewCartService(cartRepo *db.CartRepository, logger *logrus.Logger) *CartSer
 
 	return &CartService{
 		cartRepo:       cartRepo,
+		eventPublisher: eventPublisher,
 		logger:         logger,
 		productBaseURL: productBaseURL,
 	}
@@ -86,6 +88,25 @@ func (s *CartService) AddToCart(ctx context.Context, userID, productID string, q
 		return nil, err
 	}
 
+	// Publish event
+	if !itemExists {
+		// New item added
+		newItem := cart.Items[len(cart.Items)-1]
+		if publishErr := s.eventPublisher.PublishCartItemAdded(ctx, userID, &newItem, len(cart.Items)); publishErr != nil {
+			s.logger.WithError(publishErr).Error("Failed to publish cart item added event")
+		}
+	} else {
+		// Existing item updated
+		for i := range cart.Items {
+			if cart.Items[i].ProductID == productID {
+				if publishErr := s.eventPublisher.PublishCartItemUpdated(ctx, userID, &cart.Items[i], cart.Items[i].Quantity-quantity, len(cart.Items)); publishErr != nil {
+					s.logger.WithError(publishErr).Error("Failed to publish cart item updated event")
+				}
+				break
+			}
+		}
+	}
+
 	s.logger.WithFields(logrus.Fields{
 		"userId":    userID,
 		"productId": productID,
@@ -103,10 +124,12 @@ func (s *CartService) UpdateCartItem(ctx context.Context, userID string, product
 		return nil, err
 	}
 
-	// Find and update item
+	// Find and update item, keep track of old quantity
 	itemFound := false
+	var oldQuantity int
 	for i := range cart.Items {
 		if cart.Items[i].ProductID == productID {
+			oldQuantity = cart.Items[i].Quantity
 			cart.Items[i].Quantity = quantity
 			itemFound = true
 			break
@@ -121,6 +144,16 @@ func (s *CartService) UpdateCartItem(ctx context.Context, userID string, product
 	err = s.cartRepo.SaveCart(ctx, cart)
 	if err != nil {
 		return nil, err
+	}
+
+	// Publish event
+	for i := range cart.Items {
+		if cart.Items[i].ProductID == productID {
+			if publishErr := s.eventPublisher.PublishCartItemUpdated(ctx, userID, &cart.Items[i], oldQuantity, len(cart.Items)); publishErr != nil {
+				s.logger.WithError(publishErr).Error("Failed to publish cart item updated event")
+			}
+			break
+		}
 	}
 
 	s.logger.WithFields(logrus.Fields{
@@ -159,6 +192,11 @@ func (s *CartService) RemoveFromCart(ctx context.Context, userID string, product
 		return nil, err
 	}
 
+	// Publish event
+	if publishErr := s.eventPublisher.PublishCartItemRemoved(ctx, userID, productID, len(cart.Items)); publishErr != nil {
+		s.logger.WithError(publishErr).Error("Failed to publish cart item removed event")
+	}
+
 	s.logger.WithFields(logrus.Fields{
 		"userId":    userID,
 		"productId": productID,
@@ -169,9 +207,23 @@ func (s *CartService) RemoveFromCart(ctx context.Context, userID string, product
 
 // ClearCart removes all items from the cart
 func (s *CartService) ClearCart(ctx context.Context, userID string) error {
-	err := s.cartRepo.ClearCart(ctx, userID)
+	// Get current cart to know how many items are being cleared
+	cart, err := s.cartRepo.GetCart(ctx, userID)
 	if err != nil {
 		return err
+	}
+	itemsCount := len(cart.Items)
+
+	err = s.cartRepo.ClearCart(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Publish event if there were items to clear
+	if itemsCount > 0 {
+		if publishErr := s.eventPublisher.PublishCartCleared(ctx, userID, itemsCount); publishErr != nil {
+			s.logger.WithError(publishErr).Error("Failed to publish cart cleared event")
+		}
 	}
 
 	s.logger.WithField("userId", userID).Info("Cart cleared")

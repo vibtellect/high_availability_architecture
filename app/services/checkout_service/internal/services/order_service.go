@@ -23,19 +23,21 @@ var (
 )
 
 type OrderService struct {
-	orderRepo   *db.OrderRepository
-	cartRepo    *db.CartRepository
-	cartService *CartService
-	logger      *logrus.Logger
+	orderRepo      *db.OrderRepository
+	cartRepo       *db.CartRepository
+	cartService    *CartService
+	eventPublisher *EventPublisher
+	logger         *logrus.Logger
 }
 
 // NewOrderService creates a new order service
-func NewOrderService(orderRepo *db.OrderRepository, cartRepo *db.CartRepository, cartService *CartService, logger *logrus.Logger) *OrderService {
+func NewOrderService(orderRepo *db.OrderRepository, cartRepo *db.CartRepository, cartService *CartService, eventPublisher *EventPublisher, logger *logrus.Logger) *OrderService {
 	return &OrderService{
-		orderRepo:   orderRepo,
-		cartRepo:    cartRepo,
-		cartService: cartService,
-		logger:      logger,
+		orderRepo:      orderRepo,
+		cartRepo:       cartRepo,
+		cartService:    cartService,
+		eventPublisher: eventPublisher,
+		logger:         logger,
 	}
 }
 
@@ -80,6 +82,11 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod st
 	err = s.orderRepo.CreateOrder(ctx, order)
 	if err != nil {
 		return nil, err
+	}
+
+	// Publish order created event
+	if publishErr := s.eventPublisher.PublishOrderCreated(ctx, order); publishErr != nil {
+		s.logger.WithError(publishErr).Error("Failed to publish order created event")
 	}
 
 	// Clear cart after successful order creation
@@ -140,17 +147,22 @@ func (s *OrderService) UpdateOrderStatus(ctx context.Context, orderID string, st
 		return nil, err
 	}
 
-	s.logger.WithFields(logrus.Fields{
-		"orderId":   orderID,
-		"oldStatus": existingOrder.Status,
-		"newStatus": status,
-	}).Info("Order status updated")
-
 	// Get updated order to return
 	updatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Publish order status updated event
+	if publishErr := s.eventPublisher.PublishOrderStatusUpdated(ctx, updatedOrder, existingOrder.Status); publishErr != nil {
+		s.logger.WithError(publishErr).Error("Failed to publish order status updated event")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"orderId":   orderID,
+		"oldStatus": existingOrder.Status,
+		"newStatus": status,
+	}).Info("Order status updated")
 
 	return updatedOrder, nil
 }
@@ -173,11 +185,33 @@ func (s *OrderService) UpdatePaymentStatus(ctx context.Context, orderID string, 
 		return err
 	}
 
+	// Get updated order for payment event publishing (after payment status update)
+	updatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+	if err != nil {
+		s.logger.WithError(err).Error("Failed to get updated order for payment event publishing")
+	} else {
+		// Publish payment status updated event
+		if publishErr := s.eventPublisher.PublishPaymentStatusUpdated(ctx, updatedOrder, existingOrder.PaymentStatus); publishErr != nil {
+			s.logger.WithError(publishErr).Error("Failed to publish payment status updated event")
+		}
+	}
+
 	// Auto-update order status based on payment status
 	if paymentStatus == models.PaymentStatusCompleted && existingOrder.Status == models.OrderStatusPending {
 		err = s.orderRepo.UpdateOrderStatus(ctx, orderID, models.OrderStatusConfirmed)
 		if err != nil {
-			s.logger.WithError(err).WithField("orderId", orderID).Warn("Failed to auto-update order status after payment completion")
+			s.logger.WithError(err).Error("Failed to auto-update order status")
+		} else {
+			// Get the LATEST order state after status update for accurate event publishing
+			finalUpdatedOrder, err := s.orderRepo.GetOrder(ctx, orderID)
+			if err != nil {
+				s.logger.WithError(err).Error("Failed to get final updated order for auto status event publishing")
+			} else {
+				// Publish order status updated event with the current, accurate order data
+				if publishErr := s.eventPublisher.PublishOrderStatusUpdated(ctx, finalUpdatedOrder, existingOrder.Status); publishErr != nil {
+					s.logger.WithError(publishErr).Error("Failed to publish auto order status updated event")
+				}
+			}
 		}
 	}
 

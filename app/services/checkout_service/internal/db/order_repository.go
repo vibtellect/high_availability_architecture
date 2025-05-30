@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const OrderTableName = "Orders"
+const OrderTableName = "orders"
 
 type OrderRepository struct {
 	client *DynamoDBClient
