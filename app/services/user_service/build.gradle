@@ -25,7 +25,7 @@ repositories {
 
 dependencies {
     // AWS SDK BOM (must be first)
-    implementation platform('software.amazon.awssdk:bom')
+    implementation platform('software.amazon.awssdk:bom:2.29.43')
     
     // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
