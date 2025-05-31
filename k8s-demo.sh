@@ -14,21 +14,80 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m' # Prints a formatted section header with a blue color and separator line.
+#
+# Arguments:
+#
+# * The header text to display.
+#
+# Outputs:
+#
+# * Writes the formatted header to STDOUT.
+#
+# Example:
+#
+# ```bash
+# print_header "Phase 1: Baseline Auto-Scaling"
+# ```
 
 function print_header() {
     echo -e "${BLUE}🎬 $1${NC}"
     echo "----------------------------------------"
 }
 
+# Prints a status message in green with a checkmark symbol.
+#
+# Arguments:
+#
+# * The status message to display.
+#
+# Outputs:
+#
+# * Writes the formatted status message to STDOUT.
+#
+# Example:
+#
+# ```bash
+# print_status "Kubernetes cluster is running"
+# ```
 function print_status() {
     echo -e "${GREEN}✅ $1${NC}"
 }
 
+# Prints a warning message in yellow color with a warning icon.
+#
+# Arguments:
+#
+# * The warning message to display.
+#
+# Outputs:
+#
+# * The formatted warning message is printed to STDOUT.
+#
+# Example:
+#
+# ```bash
+# print_warning "This action may affect running pods."
+# ```
 function print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
+# Prints an action message in red with a flame emoji for emphasis.
+#
+# Arguments:
+#
+# * The message to display as an action.
+#
+# Outputs:
+#
+# * Writes the formatted action message to STDOUT.
+#
+# Example:
+#
+# ```bash
+# print_action "Deleting pod to simulate failure"
+# ```
 function print_action() {
     echo -e "${RED}🔥 $1${NC}"
 }

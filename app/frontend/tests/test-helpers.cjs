@@ -7,12 +7,22 @@ module.exports = {
   generateTestData
 };
 
+/**
+ * Assigns a random product ID from 1 to 10 to the test context.
+ *
+ * The selected product ID is stored as a string in {@link context.vars.randomProductId}.
+ */
 function generateRandomProductId(requestParams, context, ee, next) {
   const productIds = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
   context.vars.randomProductId = productIds[Math.floor(Math.random() * productIds.length)];
   return next();
 }
 
+/**
+ * Validates the HTTP response status and JSON body, emitting error counters for non-200 status, invalid JSON, or empty responses.
+ *
+ * Emits 'errors.status_not_200' if the response status is not 200, 'errors.invalid_json' if the body cannot be parsed as JSON, and 'errors.empty_response' if the parsed JSON is empty.
+ */
 function validateResponse(requestParams, response, context, ee, next) {
   if (response.statusCode !== 200) {
     ee.emit('counter', 'errors.status_not_200', 1);
@@ -33,6 +43,11 @@ function validateResponse(requestParams, response, context, ee, next) {
   return next();
 }
 
+/**
+ * Categorizes and logs response time metrics based on the elapsed time of an HTTP response.
+ *
+ * Emits counters for slow, medium, or fast response times, and records a histogram metric for the response time value.
+ */
 function logCustomMetric(requestParams, response, context, ee, next) {
   const responseTime = response.elapsedTime;
   
@@ -50,6 +65,12 @@ function logCustomMetric(requestParams, response, context, ee, next) {
   return next();
 }
 
+/**
+ * Simulates user behavior by assigning random think time, user type, and session request count to the test context.
+ *
+ * @remark
+ * The assigned user type ('casual', 'power', or 'admin') determines the range of requests per session.
+ */
 function simulateUserBehavior(requestParams, context, ee, next) {
   // Simulate user think time between requests
   const thinkTime = Math.random() * 2000 + 500; // 500ms to 2.5s
@@ -74,6 +95,11 @@ function simulateUserBehavior(requestParams, context, ee, next) {
   return next();
 }
 
+/**
+ * Evaluates HTTP response status and timing against performance thresholds, emitting relevant counters.
+ *
+ * Emits error counters for server (5xx) and client (4xx) errors, and performance counters based on response time: critical (>5000ms), warning (>2000ms), or good (≤1000ms). Logs a warning for critical performance cases.
+ */
 function checkPerformanceThreshold(requestParams, response, context, ee, next) {
   const responseTime = response.elapsedTime;
   const statusCode = response.statusCode;
@@ -103,6 +129,11 @@ function checkPerformanceThreshold(requestParams, response, context, ee, next) {
   return next();
 }
 
+/**
+ * Generates and assigns randomized user profile data and a product search term to the test context.
+ *
+ * The generated user data includes a random first name, last name, email, age (18–68), and shopping preferences. A random product search term is also selected and stored in the context.
+ */
 function generateTestData(requestParams, context, ee, next) {
   // Generate realistic test data
   const names = ['John', 'Jane', 'Bob', 'Alice', 'Charlie', 'Diana', 'Frank', 'Grace'];
