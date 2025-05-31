@@ -137,6 +137,185 @@ services:
       timeout: 10s
       retries: 3
 
+  # Analytics Service - Python
+  analytics-service:
+    build:
+      context: ./app/services/analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    ports:
+      - "8083:8083"
+    environment:
+      - FLASK_ENV=production
+      - PORT=8083
+      - AWS_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_SNS_ENDPOINT=http://localstack:4566
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - ANALYTICS_EVENTS_TABLE=analytics-events
+      - ANALYTICS_METRICS_TABLE=analytics-metrics
+      - ANALYTICS_AGGREGATIONS_TABLE=analytics-aggregations
+      - ANALYTICS_TOPIC_ARN=arn:aws:sns:eu-central-1:000000000000:analytics-events
+      - PRODUCT_EVENTS_QUEUE=product-events-queue
+      - USER_EVENTS_QUEUE=user-events-queue
+      - CHECKOUT_EVENTS_QUEUE=checkout-events-queue
+      - REDIS_URL=redis://redis:6379
+      - EVENTS_ENABLED=true
+      - BATCH_SIZE=100
+      - PROCESSING_INTERVAL=30
+      - PRODUCT_SERVICE_URL=http://product-service:8080
+      - USER_SERVICE_URL=http://user-service:8081
+      - CHECKOUT_SERVICE_URL=http://checkout-service:8082
+      - LOG_LEVEL=INFO
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      checkout-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    dns:
+      - 10.0.2.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Analytics Celery Worker
+  analytics-worker:
+    build:
+      context: ./app/services/analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-worker
+    command: ["python", "celery_worker.py", "--concurrency", "4", "--queues", "high_priority,aggregations,notifications", "--log-level", "INFO"]
+    environment:
+      - FLASK_ENV=production
+      - AWS_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_SNS_ENDPOINT=http://localstack:4566
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - ANALYTICS_EVENTS_TABLE=analytics-events
+      - ANALYTICS_METRICS_TABLE=analytics-metrics
+      - ANALYTICS_AGGREGATIONS_TABLE=analytics-aggregations
+      - ANALYTICS_TOPIC_ARN=arn:aws:sns:eu-central-1:000000000000:analytics-events
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    dns:
+      - 10.0.2.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis(host='redis', port=6379, db=0); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Analytics Celery Worker for Maintenance Tasks
+  analytics-worker-maintenance:
+    build:
+      context: ./app/services/analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-worker-maintenance
+    command: ["python", "celery_worker.py", "--concurrency", "2", "--queues", "maintenance", "--log-level", "INFO"]
+    environment:
+      - FLASK_ENV=production
+      - AWS_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_SNS_ENDPOINT=http://localstack:4566
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - ANALYTICS_EVENTS_TABLE=analytics-events
+      - ANALYTICS_METRICS_TABLE=analytics-metrics
+      - ANALYTICS_AGGREGATIONS_TABLE=analytics-aggregations
+      - ANALYTICS_TOPIC_ARN=arn:aws:sns:eu-central-1:000000000000:analytics-events
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    dns:
+      - 10.0.2.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis(host='redis', port=6379, db=0); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Analytics Celery Beat Scheduler
+  analytics-beat:
+    build:
+      context: ./app/services/analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics-beat
+    command: ["python", "celery_worker.py", "--beat", "--log-level", "INFO"]
+    environment:
+      - FLASK_ENV=production
+      - AWS_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DYNAMODB_ENDPOINT=http://localstack:4566
+      - AWS_SNS_ENDPOINT=http://localstack:4566
+      - AWS_SQS_ENDPOINT=http://localstack:4566
+      - ANALYTICS_EVENTS_TABLE=analytics-events
+      - ANALYTICS_METRICS_TABLE=analytics-metrics
+      - ANALYTICS_AGGREGATIONS_TABLE=analytics-aggregations
+      - ANALYTICS_TOPIC_ARN=arn:aws:sns:eu-central-1:000000000000:analytics-events
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    dns:
+      - 10.0.2.20
+    restart: unless-stopped
+    volumes:
+      - celerybeat-data:/tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis(host='redis', port=6379, db=0); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Redis for Caching
   redis:
     image: redis:7-alpine
@@ -226,4 +405,5 @@ volumes:
   localstack-data:
   redis-data:
   grafana-data:
-  prometheus-data: 
+  prometheus-data:
+  celerybeat-data: 
