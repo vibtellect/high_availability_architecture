@@ -15,7 +15,8 @@ demo-docs/
 │
 ├── 01-grundlagen/                     # 📚 Einstieg (5 min)
 │   ├── 01-system-ueberblick.md       # 🎯 Business Value & Architektur-Basics
-│   └── 02-quick-start.md             # ⚡ 3-Min Live Demo Script
+│   ├── 02-quick-start.md             # ⚡ 3-Min Live Demo Script
+│   └── 03-technologie-stack.md       # 🛠️ Technologie-Erklärungen & Business Value
 │
 ├── 02-services/                       # 🔧 Microservices (10 min)
 │   ├── 01-service-architecture.md    # 🏗️ Service Details & Communication

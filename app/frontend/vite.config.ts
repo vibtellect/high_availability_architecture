@@ -4,67 +4,105 @@ import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-    },
+  plugins: [
+    react({
+      // Enable Fast Refresh
+      fastRefresh: true,
+      // Better error handling in development
+      babel: {
+        plugins: process.env.NODE_ENV === 'development' ? [
+          ['@babel/plugin-transform-react-jsx-development', {}]
+        ] : []
+      }
+    })
+  ],
+  
+  // Better error handling
+  define: {
+    __DEV__: process.env.NODE_ENV === 'development',
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
   },
+
+  // Improved development server configuration
   server: {
     port: 3001,
     host: true,
+    strictPort: true,
+    
+    // Better error overlay
+    hmr: {
+      overlay: true,
+      clientPort: 3001
+    },
+    
+    // Proxy configuration for backend services
     proxy: {
       '/api/products': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/products/, '/api/v1/products')
+        rewrite: (path) => path.replace(/^\/api\/products/, '/api/products')
       },
       '/api/users': {
         target: 'http://localhost:8081',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/users/, '/api/v1/users')
+        rewrite: (path) => path.replace(/^\/api\/users/, '/api/users')
       },
       '/api/checkout': {
         target: 'http://localhost:8082',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/checkout/, '/api/v1/checkout')
+        rewrite: (path) => path.replace(/^\/api\/checkout/, '/api/checkout')
       },
       '/api/analytics': {
         target: 'http://localhost:8083',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/analytics/, '/api/v1/analytics')
+        rewrite: (path) => path.replace(/^\/api\/analytics/, '/api/analytics')
       }
-    },
-    warmup: {
-      clientFiles: [
-        './src/components/**/*.tsx',
-        './src/pages/**/*.tsx',
-        './src/stores/**/*.ts',
-        './src/services/**/*.ts'
-      ]
     }
   },
+
+  // Better build configuration
   build: {
-    target: 'esnext',
-    minify: 'esbuild',
+    outDir: 'dist',
     sourcemap: true,
+    
+    // Show more detailed build errors
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 1000,
+    
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          ui: ['@mui/material', '@mui/icons-material'],
-          charts: ['recharts', '@mui/x-charts'],
-          router: ['react-router-dom'],
-          state: ['zustand'],
-          http: ['axios', 'react-query']
-        },
-        chunkFileNames: 'assets/[name].[hash].js',
-        entryFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+          mui: ['@mui/material', '@mui/icons-material'],
+          router: ['react-router-dom']
+        }
+      },
+      
+      // Better error handling during build
+      onwarn(warning, warn) {
+        // Suppress certain warnings that aren't critical
+        if (warning.code === 'THIS_IS_UNDEFINED') return;
+        if (warning.code === 'CIRCULAR_DEPENDENCY') return;
+        
+        // Show other warnings
+        warn(warning);
       }
-    },
-    chunkSizeWarningLimit: 1000
+    }
   },
+
+  // Better module resolution
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+      '@components': resolve(__dirname, 'src/components'),
+      '@pages': resolve(__dirname, 'src/pages'),
+      '@services': resolve(__dirname, 'src/services'),
+      '@types': resolve(__dirname, 'src/types'),
+      '@utils': resolve(__dirname, 'src/utils')
+    }
+  },
+
+  // Optimized dependencies
   optimizeDeps: {
     include: [
       'react',
@@ -72,30 +110,22 @@ export default defineConfig({
       'react-router-dom',
       '@mui/material',
       '@mui/icons-material',
-      'zustand',
-      'axios',
-      'react-query',
-      'recharts'
-    ]
+      '@emotion/react',
+      '@emotion/styled'
+    ],
+    
+    // Handle pre-bundling errors gracefully
+    exclude: ['@mui/x-date-pickers']
   },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    css: true,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'src/test/',
-        '**/*.d.ts',
-        '**/*.config.*'
-      ]
+
+  // Development-specific error handling
+  ...(process.env.NODE_ENV === 'development' && {
+    esbuild: {
+      // Better error messages in development
+      format: 'esm',
+      logOverride: {
+        'this-is-undefined-in-esm': 'silent'
+      }
     }
-  },
-  esbuild: {
-    jsx: 'automatic',
-    target: 'esnext'
-  }
+  })
 })

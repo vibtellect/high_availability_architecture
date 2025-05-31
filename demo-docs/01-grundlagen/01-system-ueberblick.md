@@ -24,18 +24,21 @@ Eine **ausfallsichere E-Commerce Plattform**, die auch bei hoher Last und Server
 🌐 Load Balancer (NGINX)     ← Verteilt Last automatisch
        ↓
 📦 Microservices:
-   ├── 🛍️ Product Service    ← Produktkatalog
-   ├── 👤 User Service       ← Benutzer & Authentifizierung  
-   ├── 🛒 Checkout Service   ← Warenkorb & Bestellungen
-   └── 📊 Analytics Service  ← Business Intelligence
+   ├── 🛍️ Product Service    ← Produktkatalog (Kotlin + Spring Boot)
+   ├── 👤 User Service       ← Benutzer & Authentifizierung (Java + Spring Boot)
+   ├── 🛒 Checkout Service   ← Warenkorb & Bestellungen (Go + Gin)
+   └── 📊 Analytics Service  ← Business Intelligence (Python + Flask)
        ↓
-💾 Datenbanken + Cache       ← Persistente Speicherung
+💾 Datenbanken + Cache       ← Persistente Speicherung (DynamoDB + Redis)
 ```
 
 ### **💡 Warum Microservices?**
 - **Einzelne Services können ausfallen** → System läuft trotzdem weiter
 - **Jeder Service skaliert unabhängig** → Kostenoptimiert
 - **Verschiedene Teams können parallel entwickeln** → Schnellere Features
+- **Polyglot Architecture** → Richtige Technologie für jeden Use Case
+
+*→ Detaillierte Technologie-Erklärungen: [🛠️ Technologie-Stack](03-technologie-stack.md)*
 
 ---
 
@@ -102,6 +105,7 @@ Eine **ausfallsichere E-Commerce Plattform**, die auch bei hoher Last und Server
 → [⚡ Quick Start Demo](02-quick-start.md) - System live sehen
 
 **Für Entwickler:**  
+→ [🛠️ Technologie-Stack](03-technologie-stack.md) - Welche Technologien und warum?  
 → [🏗️ Service Architecture](../02-services/01-service-architecture.md) - Technische Details
 
 **Für DevOps:**

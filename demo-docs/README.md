@@ -16,6 +16,7 @@ Diese Dokumentation ist **progressiv aufgebaut** - von einfachen Grundlagen zu k
 
 - ✅ **Was ist High Availability?** - Grundkonzepte verstehen
 - ✅ **System-Überblick** - Welche Services gibt es?
+- ✅ **Technologie-Stack** - Warum nutzen wir welche Technologien?
 - ✅ **Quick Start Demo** - System in 2 Minuten laufend
 - ✅ **Business Value** - Warum ist das wichtig?
 
@@ -24,6 +25,7 @@ Diese Dokumentation ist **progressiv aufgebaut** - von einfachen Grundlagen zu k
 📁 **Verfügbare Guides:**
 - [🎯 **System-Überblick**](01-grundlagen/01-system-ueberblick.md) *(2 min)*
 - [⚡ **Quick Start**](01-grundlagen/02-quick-start.md) *(3 min)*
+- [🛠️ **Technologie-Stack**](01-grundlagen/03-technologie-stack.md) *(5 min)*
 
 ---
 
@@ -173,9 +175,9 @@ Diese Dokumentation ist **progressiv aufgebaut** - von einfachen Grundlagen zu k
 | **Zielgruppe** | **Empfohlener Pfad** | **Dauer** |
 |----------------|----------------------|-----------|
 | **Business Stakeholder** | 01 → 02 (APIs) | 15 min |
-| **Entwickler** | 01 → 02 → 03 | 30 min |
+| **Entwickler** | 01 (+ Technologie-Stack) → 02 → 03 | 35 min |
 | **DevOps/SRE** | 01 → 03 → 04 | 40 min |
-| **Platform Engineers** | 01 → 02 → 05 | 40 min |
+| **Platform Engineers** | 01 (+ Technologie-Stack) → 02 → 05 | 45 min |
 | **Cloud Architects** | Alle Bereiche | 60 min |
 
 ---
