@@ -37,6 +37,26 @@ export default defineConfig({
     
     // Proxy configuration for backend services
     proxy: {
+      '/api/v1/products': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/v1\/products/, '/api/products')
+      },
+      '/api/v1/users': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/v1\/users/, '/api/users')
+      },
+      '/api/v1/checkout': {
+        target: 'http://localhost:8082',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/v1\/checkout/, '/api/checkout')
+      },
+      '/api/v1/analytics': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        rewrite: (path) => path
+      },
       '/api/products': {
         target: 'http://localhost:8080',
         changeOrigin: true,
@@ -56,6 +76,11 @@ export default defineConfig({
         target: 'http://localhost:8083',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/analytics/, '/api/analytics')
+      },
+      '/load-test': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/load-test/, '')
       }
     }
   },

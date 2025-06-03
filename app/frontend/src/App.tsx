@@ -15,9 +15,7 @@ import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
-import DashboardPage from './pages/DashboardPage';
-import ArchitecturePage from './pages/ArchitecturePage';
-import ArchitectureDashboard from './pages/ArchitectureDashboard';
+import HighAvailabilityDashboard from './pages/HighAvailabilityDashboard';
 
 // Create a client for React Query with enhanced error handling
 const queryClient = new QueryClient({
@@ -78,9 +76,11 @@ const AppContent: React.FC = () => {
                     <Route path="/shop" element={<ProductsPage />} />
                     <Route path="/cart" element={<CartPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/architecture" element={<ArchitecturePage />} />
-                    <Route path="/arch-dashboard" element={<ArchitectureDashboard />} />
+                    
+                    {/* High Availability Dashboard - Main Demo Route */}
+                    <Route path="/dashboard" element={<HighAvailabilityDashboard />} />
+                    <Route path="/architecture" element={<HighAvailabilityDashboard />} />
+                    <Route path="/ha-dashboard" element={<HighAvailabilityDashboard />} />
                     
                     {/* Placeholder routes for future implementation */}
                     <Route path="/profile" element={<div>Profile Page - Coming Soon</div>} />

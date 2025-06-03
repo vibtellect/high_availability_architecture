@@ -27,7 +27,7 @@ import {
   Home as HomeIcon,
   Store as StoreIcon,
   Dashboard as DashboardIcon,
-  Assessment as AssessmentIcon,
+  Architecture as ArchitectureIcon,
   FavoriteOutlined as FavoriteIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
@@ -110,8 +110,7 @@ const Header: React.FC = () => {
   const navigationItems = [
     { text: 'Home', icon: <HomeIcon />, path: '/' },
     { text: 'Shop', icon: <StoreIcon />, path: '/products' },
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Architecture', icon: <AssessmentIcon />, path: '/architecture' },
+    { text: 'HA Dashboard', icon: <ArchitectureIcon />, path: '/ha-dashboard' },
   ];
 
   const drawer = (
@@ -198,8 +197,9 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <AppBar position="sticky" elevation={2} sx={{ bgcolor: 'primary.main' }}>
+      <AppBar position="sticky" elevation={1}>
         <Toolbar>
+          {/* Mobile Menu Button */}
           {isMobile && (
             <IconButton
               color="inherit"
@@ -211,40 +211,37 @@ const Header: React.FC = () => {
               <MenuIcon />
             </IconButton>
           )}
-          
+
+          {/* Logo/Brand */}
           <Typography
             variant="h6"
             noWrap
             component="div"
             onClick={() => handleNavigation('/')}
-            sx={{ 
+            sx={{
               display: { xs: 'none', sm: 'block' },
-              fontWeight: 700,
               cursor: 'pointer',
-              '&:hover': {
-                opacity: 0.8
-              }
+              fontWeight: 'bold',
+              mr: 4,
             }}
           >
             🛍️ HA E-Commerce
           </Typography>
 
+          {/* Desktop Navigation */}
           {!isMobile && (
-            <Box sx={{ display: 'flex', ml: 4 }}>
+            <Box sx={{ display: 'flex', gap: 1, mr: 'auto' }}>
               {navigationItems.map((item) => (
                 <Button
                   key={item.text}
                   color="inherit"
                   startIcon={item.icon}
                   onClick={() => handleNavigation(item.path)}
-                  sx={{ 
-                    mx: 1,
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    backgroundColor: location.pathname === item.path ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                  sx={{
+                    backgroundColor: location.pathname === item.path ? 'rgba(255,255,255,0.1)' : 'transparent',
                     '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                    }
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                    },
                   }}
                 >
                   {item.text}
@@ -253,37 +250,32 @@ const Header: React.FC = () => {
             </Box>
           )}
 
+          {/* Search Bar */}
+          <Search sx={{ flexGrow: isMobile ? 1 : 0 }}>
+            <SearchIconWrapper>
+              <SearchIcon />
+            </SearchIconWrapper>
+            <form onSubmit={handleSearchSubmit}>
+              <StyledInputBase
+                placeholder="Suchen…"
+                inputProps={{ 'aria-label': 'search' }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </form>
+          </Search>
+
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Search Bar - Only show on shop and products pages */}
-          {!isMobile && (location.pathname === '/products' || location.pathname === '/shop') && (
-            <Box component="form" onSubmit={handleSearchSubmit}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Produkte suchen..."
-                  inputProps={{ 'aria-label': 'search' }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </Search>
-            </Box>
-          )}
-
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {/* Action Buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {/* Shopping Cart */}
-            <Tooltip title={`Warenkorb (${itemCount} Artikel)`}>
+            <Tooltip title="Warenkorb">
               <IconButton
+                size="large"
+                aria-label={`show ${itemCount} items in cart`}
                 color="inherit"
                 onClick={() => handleNavigation('/cart')}
-                sx={{ 
-                  mr: 1,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                  }
-                }}
               >
                 <Badge badgeContent={itemCount} color="error">
                   <ShoppingCartIcon />
@@ -291,20 +283,28 @@ const Header: React.FC = () => {
               </IconButton>
             </Tooltip>
 
-            {/* User Menu */}
-            <Tooltip title="Benutzermenü">
+            {/* Wishlist */}
+            <Tooltip title="Wunschliste">
               <IconButton
+                size="large"
+                aria-label="wishlist"
+                color="inherit"
+                onClick={() => handleNavigation('/wishlist')}
+              >
+                <FavoriteIcon />
+              </IconButton>
+            </Tooltip>
+
+            {/* Profile Menu */}
+            <Tooltip title="Profil">
+              <IconButton
+                size="large"
                 edge="end"
                 aria-label="account of current user"
                 aria-controls="primary-search-account-menu"
                 aria-haspopup="true"
                 onClick={handleProfileMenuOpen}
                 color="inherit"
-                sx={{
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                  }
-                }}
               >
                 <AccountCircleIcon />
               </IconButton>
@@ -313,23 +313,24 @@ const Header: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Mobile Navigation Drawer */}
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{
-          keepMounted: true, // Better open performance on mobile.
-        }}
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 280 },
-        }}
-      >
-        {drawer}
-      </Drawer>
+      {/* Mobile Drawer */}
+      <nav>
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile.
+          }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
+          }}
+        >
+          {drawer}
+        </Drawer>
+      </nav>
 
-      {/* User Profile Menu */}
       {renderMenu}
     </>
   );

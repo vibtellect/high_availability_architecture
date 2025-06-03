@@ -167,55 +167,67 @@ class BackendAPIService {
   // Health Check Methods
   async getSystemHealth(): Promise<{[key: string]: 'healthy' | 'unhealthy' | 'unknown'}> {
     const health: {[key: string]: 'healthy' | 'unhealthy' | 'unknown'} = {};
+    
+    // Add cache busting parameter
+    const cacheBust = `?_cb=${Date.now()}`;
 
     // Test product service via NGINX
     try {
       const response = await this.fetchWithTimeout(
-        `${BACKEND_SERVICES.PRODUCT_SERVICE}/api/v1/products`,
-        {},
+        `${BACKEND_SERVICES.PRODUCT_SERVICE}/api/v1/products${cacheBust}`,
+        { cache: 'no-cache' },
         5000
       );
       health['product'] = response.ok ? 'healthy' : 'unhealthy';
+      console.log(`Product Service Health: ${response.status} -> ${health['product']}`);
     } catch (error) {
       health['product'] = 'unknown';
+      console.log(`Product Service Health: Error -> unknown`, error);
     }
 
-    // Test user service via NGINX (check if auth endpoint responds)
+    // Test user service via its dedicated health endpoint
     try {
       const response = await this.fetchWithTimeout(
-        `${BACKEND_SERVICES.USER_SERVICE}/api/v1/users`,
-        {},
+        `${BACKEND_SERVICES.USER_SERVICE}/user/health${cacheBust}`,
+        { cache: 'no-cache' },
         5000
       );
-      health['user'] = response.ok || response.status === 401 ? 'healthy' : 'unhealthy';
+      health['user'] = response.ok ? 'healthy' : 'unhealthy';
+      console.log(`User Service Health: ${response.status} -> ${health['user']}`);
     } catch (error) {
       health['user'] = 'unknown';
+      console.log(`User Service Health: Error -> unknown`, error);
     }
 
-    // Test checkout service via NGINX
+    // Test checkout service via its dedicated health endpoint
     try {
       const response = await this.fetchWithTimeout(
-        `${BACKEND_SERVICES.CHECKOUT_SERVICE}/api/v1/checkout`,
-        {},
+        `${BACKEND_SERVICES.CHECKOUT_SERVICE}/checkout/health${cacheBust}`,
+        { cache: 'no-cache' },
         5000
       );
-      health['checkout'] = response.ok || response.status === 401 ? 'healthy' : 'unhealthy';
+      health['checkout'] = response.ok ? 'healthy' : 'unhealthy';
+      console.log(`Checkout Service Health: ${response.status} -> ${health['checkout']}`);
     } catch (error) {
       health['checkout'] = 'unknown';
+      console.log(`Checkout Service Health: Error -> unknown`, error);
     }
 
-    // Test analytics service directly (may not be behind NGINX)
+    // Test analytics service via main health endpoint for consistency
     try {
       const response = await this.fetchWithTimeout(
-        `${BACKEND_SERVICES.ANALYTICS_SERVICE}/health`,
-        {},
+        `${BACKEND_SERVICES.ANALYTICS_SERVICE}/health${cacheBust}`,
+        { cache: 'no-cache' },
         5000
       );
       health['analytics'] = response.ok ? 'healthy' : 'unhealthy';
+      console.log(`Analytics Service Health: ${response.status} -> ${health['analytics']}`);
     } catch (error) {
       health['analytics'] = 'unknown';
+      console.log(`Analytics Service Health: Error -> unknown`, error);
     }
 
+    console.log('Final Health Check Results:', health);
     return health;
   }
 
