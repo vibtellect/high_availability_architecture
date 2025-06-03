@@ -1,54 +1,79 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    cluster: 'high-availability-demo'
+
+# Remote write receiver for k6 metrics
+remote_write:
+  - url: http://localhost:9090/api/v1/write
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
 
 rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
+  - "alert_rules.yml"
+  - "recording_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
 
 scrape_configs:
   # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+    scrape_interval: 15s
 
-  # Product Service
+  # Product Service (Spring Boot)
   - job_name: 'product-service'
     static_configs:
       - targets: ['product-service:8080']
     metrics_path: '/actuator/prometheus'
-    scrape_interval: 30s
+    scrape_interval: 15s
+    scrape_timeout: 10s
 
-  # User Service
+  # User Service (Spring Boot)
   - job_name: 'user-service'
     static_configs:
       - targets: ['user-service:8081']
     metrics_path: '/actuator/prometheus'
-    scrape_interval: 30s
+    scrape_interval: 15s
+    scrape_timeout: 10s
 
-  # Checkout Service
+  # Checkout Service (Go)
   - job_name: 'checkout-service'
     static_configs:
       - targets: ['checkout-service:8082']
     metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Analytics Service (Python)
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8083']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # NGINX API Gateway
-  - job_name: 'nginx'
+  # Jaeger
+  - job_name: 'jaeger'
     static_configs:
-      - targets: ['nginx:80']
-    metrics_path: '/nginx_status'
+      - targets: ['jaeger:14269']
+    metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # Redis
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis-exporter:9121']
-    scrape_interval: 30s
-
-  # LocalStack
-  - job_name: 'localstack'
-    static_configs:
-      - targets: ['localstack:4566']
-    metrics_path: '/_localstack/health'
-    scrape_interval: 60s
+  # k6 load testing metrics will be sent via remote write
+  # No scraping needed as k6 pushes metrics directly to Prometheus

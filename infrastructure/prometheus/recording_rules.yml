@@ -1,0 +1,96 @@
+groups:
+  - name: high-availability-recording-rules
+    interval: 30s
+    rules:
+      # Service Health Recording Rules
+      - record: service:up:rate5m
+        expr: avg_over_time(up[5m])
+
+      - record: service:request_rate:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (service, job)
+
+      - record: service:error_rate:rate5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (service, job) / sum(rate(http_requests_total[5m])) by (service, job)
+
+      - record: service:response_time:p95:rate5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service, job))
+
+      - record: service:response_time:p99:rate5m
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service, job))
+
+      # System Resource Recording Rules
+      - record: node:cpu_utilization:rate5m
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      - record: node:memory_utilization:rate5m
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+      # Load Test Recording Rules
+      - record: loadtest:requests_per_second:rate1m
+        expr: rate(load_test_requests_total[1m])
+
+      - record: loadtest:response_time:p95:rate1m
+        expr: histogram_quantile(0.95, rate(load_test_response_time_bucket[1m]))
+
+      - record: loadtest:error_rate:rate1m
+        expr: rate(load_test_errors_total[1m]) / rate(load_test_requests_total[1m])
+
+      # Chaos Engineering Recording Rules
+      - record: chaos:experiment_rate:rate5m
+        expr: rate(chaos_experiments_total[5m])
+
+      - record: chaos:impact_level:avg5m
+        expr: avg_over_time(chaos_impact_level[5m])
+
+      - record: chaos:circuit_breaker_triggered:rate5m
+        expr: rate(circuit_breaker_triggered_total[5m])
+
+      - record: chaos:recovery_attempts:rate5m
+        expr: rate(auto_recovery_attempts_total[5m])
+
+  - name: aggregated-metrics
+    interval: 60s
+    rules:
+      # Overall System Health
+      - record: system:health_score:avg
+        expr: avg(service_health_score)
+
+      - record: system:service_count:up
+        expr: count(up{job=~".*-service"} == 1)
+
+      - record: system:service_count:down
+        expr: count(up{job=~".*-service"} == 0)
+
+      # Overall Request Statistics
+      - record: system:request_rate:sum
+        expr: sum(service:request_rate:rate5m)
+
+      - record: system:error_rate:avg
+        expr: avg(service:error_rate:rate5m)
+
+      - record: system:response_time:p95:max
+        expr: max(service:response_time:p95:rate5m)
+
+      # Resource Utilization Aggregates
+      - record: cluster:cpu_utilization:avg
+        expr: avg(node:cpu_utilization:rate5m)
+
+      - record: cluster:memory_utilization:avg
+        expr: avg(node:memory_utilization:rate5m)
+
+  - name: slo-metrics
+    interval: 60s
+    rules:
+      # Service Level Objectives
+      - record: slo:availability:7d
+        expr: avg_over_time(service:up:rate5m[7d])
+
+      - record: slo:error_rate:7d
+        expr: avg_over_time(service:error_rate:rate5m[7d])
+
+      - record: slo:response_time:p95:7d
+        expr: quantile_over_time(0.95, service:response_time:p95:rate5m[7d])
+
+      # Resilience Metrics - Simplified version
+      - record: resilience:recovery_success_rate:rate1h
+        expr: rate(auto_recovery_success_total[1h]) / rate(auto_recovery_attempts_total[1h]) 

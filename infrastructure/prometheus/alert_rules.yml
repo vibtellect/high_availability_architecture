@@ -1,0 +1,114 @@
+groups:
+  - name: high-availability-alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 30 seconds."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.service }}"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on {{ $labels.service }}"
+          description: "95th percentile response time is {{ $value }}s on {{ $labels.service }}"
+
+      - alert: ChaosExperimentActive
+        expr: chaos_experiment_active == 1
+        for: 0s
+        labels:
+          severity: info
+        annotations:
+          summary: "Chaos experiment is currently active"
+          description: "Chaos engineering experiment is running - expect system instability"
+
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker open on {{ $labels.service }}"
+          description: "Circuit breaker {{ $labels.circuit_breaker }} is open on {{ $labels.service }}"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+  - name: load-test-alerts
+    rules:
+      - alert: LoadTestStarted
+        expr: load_test_active == 1
+        for: 0s
+        labels:
+          severity: info
+        annotations:
+          summary: "Load test started"
+          description: "Load test is currently running"
+
+      - alert: LoadTestHighRPS
+        expr: load_test_requests_per_second > 1000
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "High RPS during load test"
+          description: "Load test is generating {{ $value }} requests per second"
+
+  - name: resilience-alerts
+    rules:
+      - alert: MultipleServiceFailures
+        expr: count(up{job=~".*-service"} == 0) >= 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Multiple services are down"
+          description: "{{ $value }} services are currently down"
+
+      - alert: RecoveryAttemptsHigh
+        expr: rate(auto_recovery_attempts_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of recovery attempts"
+          description: "Auto recovery attempts rate is {{ $value }} per second"
+
+      - alert: SystemHealthDegraded
+        expr: avg(service_health_score) < 70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System health degraded"
+          description: "Average system health score is {{ $value | humanizePercentage }}" 
