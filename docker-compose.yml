@@ -365,14 +365,27 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-polystat-panel,redis-datasource
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_SECURITY_ALLOW_EMBEDDING=true
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
-      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - microservices-network
+    depends_on:
+      - prometheus
+      - jaeger
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Prometheus for Metrics Collection
   prometheus:
@@ -382,6 +395,8 @@ services:
       - "9090:9090"
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./infrastructure/prometheus/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -390,8 +405,80 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.enable-remote-write-receiver'
+      - '--storage.tsdb.min-block-duration=5m'
+      - '--storage.tsdb.max-block-duration=2h'
     networks:
       - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "14268:14268"   # Jaeger collector HTTP
+      - "14250:14250"   # Jaeger collector gRPC
+      - "14269:14269"   # Jaeger admin port
+      - "9411:9411"     # Zipkin collector
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://prometheus:9090
+      - QUERY_BASE_PATH=/jaeger
+      - JAEGER_DISABLED=false
+      - SPAN_STORAGE_TYPE=memory
+    command: [
+      "--memory.max-traces=10000",
+      "--query.max-clock-skew-adjustment=1s",
+      "--query.ui-config=/etc/jaeger/ui-config.json",
+      "--collector.otlp.grpc.host-port=0.0.0.0:4317",
+      "--collector.otlp.http.host-port=0.0.0.0:4318",
+      "--prometheus.server-url=http://prometheus:9090"
+    ]
+    volumes:
+      - ./infrastructure/jaeger/ui-config.json:/etc/jaeger/ui-config.json:ro
+    networks:
+      - microservices-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # k6 Load Testing Service
+  k6:
+    image: grafana/k6:latest
+    container_name: k6-load-tester
+    environment:
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+      - K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max,avg,med
+      - K6_PROMETHEUS_RW_PUSH_INTERVAL=5s
+    volumes:
+      - ./infrastructure/k6-scripts:/scripts:ro
+    networks:
+      - microservices-network
+    # Will be controlled via API calls, not auto-start
+    entrypoint: ["/bin/sh", "-c", "while true; do sleep 30; done"]
+    depends_on:
+      - prometheus
+      - product-service
+      - user-service
+      - checkout-service
+      - analytics-service
     restart: unless-stopped
 
 networks:

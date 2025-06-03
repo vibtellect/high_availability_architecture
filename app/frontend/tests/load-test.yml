@@ -1,0 +1,109 @@
+config:
+  target: 'http://localhost:3001'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Ramp up"
+    - duration: 120
+      arrivalRate: 25
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 50
+      name: "Peak load"
+    - duration: 30
+      arrivalRate: 10
+      name: "Ramp down"
+  processor: "./test-helpers.cjs"
+  variables:
+    productId:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  - name: "Frontend Performance Test"
+    weight: 100
+    flow:
+      - get:
+          url: "/"
+          name: "Homepage Load"
+          expect:
+            - statusCode: 200
+            - contentType: "text/html"
+          beforeRequest: "generateTestData"
+          afterResponse: "logCustomMetric"
+          
+      - think: 2
+      
+      - get:
+          url: "/api/products"
+          name: "Products API"
+          expect:
+            - statusCode: 200
+            - contentType: "application/json"
+          beforeRequest: "simulateUserBehavior"
+          afterResponse: "validateResponse"
+          
+      - think: 1
+      
+      - get:
+          url: "/api/products/{{ randomProductId }}"
+          name: "Product Detail"
+          expect:
+            - statusCode: 200
+          beforeRequest: "generateRandomProductId"
+          afterResponse: "checkPerformanceThreshold"
+      
+      - think: 2
+      
+      - get:
+          url: "/api/analytics/dashboard"
+          name: "Analytics Dashboard"
+          expect:
+            - statusCode: 200
+      
+      - think: 3
+      
+      - post:
+          url: "/api/checkout/cart"
+          name: "Add to Cart"
+          json:
+            productId: "{{ productId }}"
+            quantity: 1
+          expect:
+            - statusCode: [200, 201]
+      
+      - think: 2
+      
+      - get:
+          url: "/dashboard"
+          name: "Architecture Dashboard"
+          expect:
+            - statusCode: 200
+
+  - name: "API Stress Test"
+    weight: 30
+    flow:
+      - loop:
+          - get:
+              url: "/api/products"
+              name: "Rapid API Calls"
+          - get:
+              url: "/api/analytics/metrics"
+              name: "Metrics API"
+        count: 5
+
+  - name: "Static Assets Test"
+    weight: 20
+    flow:
+      - get:
+          url: "/static/js/main.js"
+          name: "Main JS Bundle"
+      - get:
+          url: "/static/css/main.css"
+          name: "Main CSS Bundle" 

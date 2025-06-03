@@ -1,0 +1,67 @@
+{
+  "linkPatterns": [
+    {
+      "type": "logs",
+      "key": "trace_id",
+      "url": "http://localhost:3000/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22expr%22:%22%7Btrace_id%3D%5C%22#{trace_id}%5C%22%7D%22%7D%5D%7D",
+      "text": "View Logs"
+    },
+    {
+      "type": "metrics",
+      "key": "service",
+      "url": "http://localhost:3000/d/ha-architecture-overview/high-availability-architecture-overview?orgId=1&var-service=#{service}&from=#{start}&to=#{end}",
+      "text": "View Metrics"
+    }
+  ],
+  "dependencies": {
+    "dagMaxNumServices": 200,
+    "menuEnabled": true
+  },
+  "archiveEnabled": false,
+  "tracking": {
+    "gaID": null,
+    "trackErrors": false
+  },
+  "menu": [
+    {
+      "label": "Documentation",
+      "items": [
+        {
+          "label": "Quick Start",
+          "url": "https://www.jaegertracing.io/docs/latest/getting-started/"
+        },
+        {
+          "label": "Troubleshooting",
+          "url": "https://www.jaegertracing.io/docs/latest/troubleshooting/"
+        }
+      ]
+    },
+    {
+      "label": "Demo Links",
+      "items": [
+        {
+          "label": "Grafana Dashboard",
+          "url": "http://localhost:3000"
+        },
+        {
+          "label": "Frontend",
+          "url": "http://localhost:3001"
+        },
+        {
+          "label": "Prometheus",
+          "url": "http://localhost:9090"
+        }
+      ]
+    }
+  ],
+  "search": {
+    "maxLookback": {
+      "label": "2 days",
+      "value": "2d"
+    },
+    "maxLimit": 1500
+  },
+  "topology": {
+    "enabled": true
+  }
+} 

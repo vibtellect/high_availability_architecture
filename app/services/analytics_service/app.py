@@ -12,6 +12,7 @@ from flask_cors import CORS
 from src.config.settings import Config
 from src.controllers.analytics_controller import analytics_bp
 from src.controllers.health_controller import health_bp
+from src.controllers.chaos_controller import chaos_bp
 from src.middleware.monitoring_middleware import RequestMonitoringMiddleware, get_metrics_endpoint
 from src.services.background_tasks import celery_app
 
@@ -91,6 +92,7 @@ def create_app(config_name: str = None) -> Flask:
     # Register blueprints
     app.register_blueprint(analytics_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(chaos_bp)
     
     # Add Prometheus metrics endpoint
     @app.route('/metrics')
@@ -166,7 +168,10 @@ def create_app(config_name: str = None) -> Flask:
                 'events': '/api/v1/analytics/events',
                 'dashboard': '/api/v1/analytics/dashboard/metrics',
                 'search': '/api/v1/analytics/events/search',
-                'aggregations': '/api/v1/analytics/aggregations/{period}'
+                'aggregations': '/api/v1/analytics/aggregations/{period}',
+                'load_test_metrics': '/api/v1/analytics/metrics/load-test',
+                'load_test_start': '/api/v1/analytics/load-test/start',
+                'load_test_stop': '/api/v1/analytics/load-test/stop'
             }
         })
     

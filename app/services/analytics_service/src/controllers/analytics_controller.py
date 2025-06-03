@@ -534,6 +534,221 @@ def trigger_aggregation_generation(period: str):
             'correlation_id': get_correlation_id()
         }), 500
 
+@analytics_bp.route('/metrics/load-test', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_load_test_metrics():
+    """
+    Get current load test metrics for the frontend dashboard
+    """
+    try:
+        # Get load test metrics from cache or generate mock data
+        cache_key = "load_test_metrics"
+        cached_metrics = cache_service.get(cache_key)
+        
+        if cached_metrics:
+            return jsonify(cached_metrics), 200
+        
+        # Generate realistic mock metrics
+        import random
+        metrics = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'metrics': {
+                'requests_per_second': random.randint(80, 120),
+                'average_response_time': random.randint(120, 250),
+                'error_rate': random.uniform(0.1, 2.5),
+                'active_users': random.randint(50, 200),
+                'cpu_usage': random.uniform(25, 75),
+                'memory_usage': random.uniform(40, 80)
+            },
+            'services': {
+                'product-service': {
+                    'status': 'healthy' if random.random() > 0.1 else 'degraded',
+                    'response_time': random.randint(80, 200),
+                    'requests': random.randint(1000, 5000)
+                },
+                'user-service': {
+                    'status': 'healthy' if random.random() > 0.05 else 'degraded',
+                    'response_time': random.randint(90, 180),
+                    'requests': random.randint(800, 3000)
+                },
+                'checkout-service': {
+                    'status': 'healthy' if random.random() > 0.15 else 'degraded',
+                    'response_time': random.randint(100, 300),
+                    'requests': random.randint(500, 2000)
+                },
+                'analytics-service': {
+                    'status': 'healthy' if random.random() > 0.02 else 'degraded',
+                    'response_time': random.randint(70, 150),
+                    'requests': random.randint(2000, 8000)
+                }
+            }
+        }
+        
+        # Cache for 2 seconds
+        cache_service.set(cache_key, metrics, ttl=2)
+        
+        return jsonify(metrics), 200
+        
+    except Exception as e:
+        logger.error(
+            "Failed to get load test metrics",
+            **add_structured_context(error=str(e)),
+            exc_info=True
+        )
+        return jsonify({
+            'error': 'Failed to retrieve load test metrics',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/chaos-status', methods=['GET'])
+@correlation_id_required  
+@log_function_call()
+def get_chaos_status():
+    """
+    Get current chaos engineering status - proxy to chaos controller
+    """
+    try:
+        # Import chaos state from chaos controller
+        from src.controllers.chaos_controller import chaos_state
+        
+        return jsonify({
+            'timestamp': datetime.utcnow().isoformat(),
+            'chaos_engineering': {
+                'active': chaos_state['active'],
+                'scenario': chaos_state.get('experiment_type', 'none'),
+                'affected_services': chaos_state.get('affected_services', []),
+                'start_time': chaos_state.get('start_time', ''),
+                'impact_level': chaos_state.get('impact_level', 'low')
+            },
+            'system_resilience': {
+                'circuit_breakers_triggered': chaos_state['circuit_breakers_triggered'],
+                'auto_recovery_attempts': chaos_state['auto_recovery_attempts'],
+                'service_health_scores': chaos_state['service_health_scores']
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(
+            "Failed to get chaos status",
+            **add_structured_context(error=str(e)),
+            exc_info=True
+        )
+        return jsonify({
+            'error': 'Failed to retrieve chaos status',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/load-test/start', methods=['POST'])
+@correlation_id_required
+@log_function_call()
+def start_load_test():
+    """Start load test via Load Test Simulator"""
+    try:
+        import requests
+        
+        # Get configuration from request
+        config = request.get_json() or {}
+        duration = config.get('duration', 300)
+        rps = config.get('rps', 100)
+        target = config.get('target', 'all-services')
+        
+        # Forward configuration to Load Test Simulator via POST with JSON payload
+        simulator_payload = {
+            'duration': duration,
+            'rps': rps,
+            'target': target
+        }
+        
+        simulator_response = requests.post(
+            'http://load-test-simulator:8080/start',
+            json=simulator_payload,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if simulator_response.status_code != 200:
+            raise Exception(f"Load Test Simulator error: {simulator_response.status_code}")
+            
+        result = simulator_response.json()
+        
+        logger.info(
+            "Load test started",
+            **add_structured_context(
+                test_id=result.get('test_id'),
+                duration=duration,
+                rps=rps,
+                target=target
+            )
+        )
+        
+        return jsonify({
+            'success': True,
+            'test_id': result.get('test_id'),
+            'status': 'started',
+            'configuration': {
+                'duration': duration,
+                'rps': rps,
+                'target': target
+            },
+            'correlation_id': get_correlation_id()
+        }), 200
+        
+    except Exception as e:
+        logger.error(
+            "Failed to start load test",
+            **add_structured_context(error=str(e)),
+            exc_info=True
+        )
+        return jsonify({
+            'error': 'Failed to start load test',
+            'message': str(e),
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/load-test/stop', methods=['POST'])
+@correlation_id_required
+@log_function_call()
+def stop_load_test():
+    """Stop load test via Load Test Simulator"""
+    try:
+        import requests
+        
+        # Stop Load Test Simulator
+        simulator_response = requests.get('http://load-test-simulator:8080/stop')
+        
+        if simulator_response.status_code != 200:
+            raise Exception(f"Load Test Simulator error: {simulator_response.status_code}")
+            
+        result = simulator_response.json()
+        
+        logger.info(
+            "Load test stopped",
+            **add_structured_context(
+                test_id=result.get('test_id'),
+                elapsed=result.get('elapsed')
+            )
+        )
+        
+        return jsonify({
+            'success': True,
+            'test_id': result.get('test_id'),
+            'status': 'stopped',
+            'elapsed': result.get('elapsed'),
+            'correlation_id': get_correlation_id()
+        }), 200
+        
+    except Exception as e:
+        logger.error(
+            "Failed to stop load test",
+            **add_structured_context(error=str(e)),
+            exc_info=True
+        )
+        return jsonify({
+            'error': 'Failed to stop load test',
+            'message': str(e),
+            'correlation_id': get_correlation_id()
+        }), 500
+
 # Error handlers for the blueprint
 @analytics_bp.errorhandler(ValidationError)
 def handle_validation_error(error):
