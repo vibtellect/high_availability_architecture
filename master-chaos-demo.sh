@@ -1,1 +1,0 @@
-demo-docs/scripts/chaos/master-chaos-demo.sh

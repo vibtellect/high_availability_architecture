@@ -1,1 +1,0 @@
-demo-docs/scripts/k8s-demo.sh

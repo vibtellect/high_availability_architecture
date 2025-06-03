@@ -1,1 +1,0 @@
-demo-docs/scripts/check-demo-health.sh

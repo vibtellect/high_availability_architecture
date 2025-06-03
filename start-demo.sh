@@ -1,1 +1,0 @@
-demo-docs/scripts/start-demo.sh
