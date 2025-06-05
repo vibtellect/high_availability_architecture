@@ -675,3 +675,30 @@ plannung/
 
 # LocalStack data directory (development only)
 localstack-data/
+
+# ================================
+# Internal Documentation & Planning
+# (Should not be in public repository)
+# ================================
+# Strategy and planning documents
+*_STRATEGY.md
+*_PLAN.md
+*_ROADMAP.md
+
+# Task completion and progress tracking
+TASK_*.md
+*_COMPLETION*.md
+*_EXPECTED_OUTCOMES.md
+
+# Demo scripts and internal documentation
+DEMO_SCRIPT_*.md
+*_DEMO_*.md
+
+# Chaos engineering internal docs
+CHAOS_ENGINEERING_*.md
+
+# Frontend planning docs
+FRONTEND_*.md
+
+# AWS and deployment strategies
+AWS_*.md
