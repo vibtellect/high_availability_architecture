@@ -12,7 +12,7 @@ import useErrorHandler from './hooks/useErrorHandler';
 // Pages - Demo-focused
 import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
-import HighAvailabilityDashboard from './pages/HighAvailabilityDashboard';
+import DemoControlPanel from './pages/DemoControlPanel';
 
 // Create a client for React Query with enhanced error handling
 const queryClient = new QueryClient({
@@ -70,8 +70,8 @@ const AppContent: React.FC = () => {
                   {/* Demo-focused routes */}
                   <Route path="/" element={<HomePage />} />
                   <Route path="/products" element={<ProductsPage />} />
-                  <Route path="/dashboard" element={<HighAvailabilityDashboard />} />
-                  <Route path="/architecture" element={<HighAvailabilityDashboard />} />
+                  <Route path="/dashboard" element={<DemoControlPanel />} />
+                                      <Route path="/architecture" element={<DemoControlPanel />} />
                   
                   {/* 404 Page */}
                   <Route 
