@@ -66,23 +66,35 @@ func main() {
 	cartRepo := db.NewCartRepository(dynamoClient, log)
 	orderRepo := db.NewOrderRepository(dynamoClient, log)
 
-	// Initialize services with event publisher
+	// Initialize Product Service client with circuit breaker
+	productServiceURL := "http://product-service:8080" // Default URL, can be made configurable
+	productClient := services.NewProductServiceClient(productServiceURL, log)
+
+	// Initialize services with event publisher and product client
 	cartService := services.NewCartService(cartRepo, eventPublisher, log)
-	orderService := services.NewOrderService(orderRepo, cartRepo, cartService, eventPublisher, log)
+	orderService := services.NewOrderService(orderRepo, cartRepo, cartService, eventPublisher, productClient, log)
 
 	// Initialize handlers
 	cartHandler := handlers.NewCartHandler(cartService, log)
 	orderHandler := handlers.NewOrderHandler(orderService, log)
+	circuitBreakerHandler := handlers.NewCircuitBreakerHandler(productClient, log)
 
 	// Setup router using shared configuration
 	routerInstance := router.SetupRouter(&router.RouterConfig{
-		Config:       cfg,
-		Logger:       log,
-		DynamoClient: dynamoClient,
-		CartHandler:  cartHandler,
-		OrderHandler: orderHandler,
-		IsTestMode:   false,
+		Config:                cfg,
+		Logger:                log,
+		DynamoClient:          dynamoClient,
+		CartHandler:           cartHandler,
+		OrderHandler:          orderHandler,
+		CircuitBreakerHandler: circuitBreakerHandler,
+		IsTestMode:            false,
 	})
+
+	// Start metrics updater for circuit breakers
+	metricsUpdater := services.NewMetricsUpdater(productClient, log)
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	defer metricsCancel()
+	metricsUpdater.Start(metricsCtx, 30*time.Second) // Update every 30 seconds
 
 	// Start server
 	log.WithFields(logrus.Fields{
@@ -90,7 +102,7 @@ func main() {
 		"service":     cfg.ServiceName,
 		"version":     cfg.ServiceVersion,
 		"environment": string(cfg.Environment),
-	}).Info("Starting Checkout Service server")
+	}).Info("Starting Checkout Service server with Circuit Breaker monitoring")
 
 	if err := routerInstance.Run(":" + cfg.Port); err != nil {
 		log.WithError(err).Fatal("Failed to start server")

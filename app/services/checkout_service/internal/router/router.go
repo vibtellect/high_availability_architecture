@@ -18,12 +18,13 @@ import (
 
 // RouterConfig holds the configuration and dependencies for router setup
 type RouterConfig struct {
-	Config       *config.Config
-	Logger       *logrus.Logger
-	DynamoClient *db.DynamoDBClient
-	CartHandler  *handlers.CartHandler
-	OrderHandler *handlers.OrderHandler
-	IsTestMode   bool
+	Config                *config.Config
+	Logger                *logrus.Logger
+	DynamoClient          *db.DynamoDBClient
+	CartHandler           *handlers.CartHandler
+	OrderHandler          *handlers.OrderHandler
+	CircuitBreakerHandler *handlers.CircuitBreakerHandler
+	IsTestMode            bool
 }
 
 // SetupRouter creates and configures the Gin router with all routes
@@ -73,6 +74,12 @@ func SetupRouter(routerConfig *RouterConfig) *gin.Engine {
 	// API v1 routes group
 	v1 := router.Group("/api/v1")
 	{
+		// Circuit breaker status endpoints
+		if routerConfig.CircuitBreakerHandler != nil {
+			v1.GET("/circuit-breakers", routerConfig.CircuitBreakerHandler.GetCircuitBreakerStatus)
+			v1.GET("/health/circuit-breakers", routerConfig.CircuitBreakerHandler.GetHealthWithCircuitBreaker)
+		}
+
 		// Checkout service endpoints
 		checkout := v1.Group("/checkout")
 		{

@@ -639,69 +639,124 @@ def get_chaos_status():
             'correlation_id': get_correlation_id()
         }), 500
 
+@analytics_bp.route('/load-test/scenarios-simple', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_load_test_scenarios_simple():
+    """Get available k6 load test scenarios - simple version"""
+    return jsonify({
+        'success': True,
+        'scenarios': {
+            'baseline': 'microservices-load-test.js',
+            'spike': 'spike-test.js',
+            'stress': 'stress-test.js'
+        },
+        'correlation_id': get_correlation_id()
+    }), 200
+
 @analytics_bp.route('/load-test/start', methods=['POST'])
 @correlation_id_required
 @log_function_call()
 def start_load_test():
-    """Start load test via Load Test Simulator"""
+    """Start k6 load test by executing k6 container with proper configuration"""
     try:
-        import requests
+        import subprocess
+        import time
+        import os
+        import tempfile
         
         # Get configuration from request
         config = request.get_json() or {}
-        duration = config.get('duration', 300)
-        rps = config.get('rps', 100)
-        target = config.get('target', 'all-services')
+        duration = config.get('duration', 60)  # seconds
+        target_vus = config.get('vus', config.get('rps', 10))  # Use VUs instead of RPS
+        target_service = config.get('target', 'all-services')
+        test_type = config.get('type', 'baseline')  # baseline, spike, stress
         
-        # Forward configuration to Load Test Simulator via POST with JSON payload
-        simulator_payload = {
-            'duration': duration,
-            'rps': rps,
-            'target': target
+        # Generate unique test ID
+        test_id = f"k6-test-{int(time.time())}"
+        
+        logger.info(f"Starting k6 load test {test_id}: {target_service}, {target_vus} VUs, {duration}s")
+        
+        # Select appropriate k6 script based on test type
+        script_map = {
+            'baseline': 'microservices-load-test.js',
+            'spike': 'spike-test.js', 
+            'stress': 'stress-test.js',
+            'api': 'api-load-test.js'
         }
         
-        simulator_response = requests.post(
-            'http://load-test-simulator:8080/start',
-            json=simulator_payload,
-            headers={'Content-Type': 'application/json'}
-        )
+        script_file = script_map.get(test_type, 'microservices-load-test.js')
         
-        if simulator_response.status_code != 200:
-            raise Exception(f"Load Test Simulator error: {simulator_response.status_code}")
+        # Execute k6 in Docker container with proper environment variables
+        k6_command = [
+            'docker', 'exec', '-d', 'k6-load-tester',
+            'k6', 'run',
+            '--out', 'experimental-prometheus-rw',
+            '--env', f'DURATION={duration}',
+            '--env', f'TARGET_VUS={target_vus}',
+            '--env', f'TARGET_SERVICE={target_service}',
+            '--env', f'TEST_ID={test_id}',
+            f'/scripts/{script_file}'
+        ]
+        
+        # Execute the command
+        process = subprocess.run(k6_command, capture_output=True, text=True, timeout=30)
+        
+        if process.returncode == 0:
+            logger.info(f"k6 load test {test_id} started successfully")
             
-        result = simulator_response.json()
-        
-        logger.info(
-            "Load test started",
-            **add_structured_context(
-                test_id=result.get('test_id'),
-                duration=duration,
-                rps=rps,
-                target=target
-            )
-        )
-        
+            # Store test state in cache for tracking
+            test_state = {
+                'test_id': test_id,
+                'status': 'running',
+                'start_time': time.time(),
+                'configuration': {
+                    'duration': duration,
+                    'target_vus': target_vus,
+                    'target_service': target_service,
+                    'test_type': test_type,
+                    'script_file': script_file
+                },
+                'expected_end_time': time.time() + duration + 60  # Add buffer for ramp-up/down
+            }
+            
+            # Store in Redis cache for status tracking
+            try:
+                from src.services.cache_service import cache_service
+                cache_service.set_value(f"k6_test_state:{test_id}", test_state, ttl=duration + 300)
+                cache_service.set_value("k6_active_test", test_id, ttl=duration + 300)
+            except Exception as cache_error:
+                logger.warning(f"Failed to cache test state: {cache_error}")
+            
+            return jsonify({
+                'success': True,
+                'status': 'started',
+                'test_id': test_id,
+                'message': f'k6 load test started successfully with {target_vus} VUs for {duration}s',
+                'configuration': test_state['configuration'],
+                'expected_duration': duration,
+                'correlation_id': get_correlation_id()
+            }), 200
+        else:
+            logger.error(f"Failed to start k6 test: {process.stderr}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to start k6 container: {process.stderr}',
+                'correlation_id': get_correlation_id()
+            }), 500
+
+    except subprocess.TimeoutExpired:
+        logger.error("k6 start command timed out")
         return jsonify({
-            'success': True,
-            'test_id': result.get('test_id'),
-            'status': 'started',
-            'configuration': {
-                'duration': duration,
-                'rps': rps,
-                'target': target
-            },
+            'success': False,
+            'error': 'k6 start command timed out',
             'correlation_id': get_correlation_id()
-        }), 200
-        
+        }), 500
     except Exception as e:
-        logger.error(
-            "Failed to start load test",
-            **add_structured_context(error=str(e)),
-            exc_info=True
-        )
+        logger.error(f"Failed to start k6 load test: {str(e)}")
         return jsonify({
-            'error': 'Failed to start load test',
-            'message': str(e),
+            'success': False,
+            'error': str(e),
             'correlation_id': get_correlation_id()
         }), 500
 
@@ -709,43 +764,565 @@ def start_load_test():
 @correlation_id_required
 @log_function_call()
 def stop_load_test():
-    """Stop load test via Load Test Simulator"""
+    """Stop any running k6 load tests"""
     try:
-        import requests
+        import subprocess
         
-        # Stop Load Test Simulator
-        simulator_response = requests.get('http://load-test-simulator:8080/stop')
+        logger.info("Stopping all k6 load tests")
         
-        if simulator_response.status_code != 200:
-            raise Exception(f"Load Test Simulator error: {simulator_response.status_code}")
-            
-        result = simulator_response.json()
+        # Kill any running k6 processes in the container
+        stop_command = [
+            'docker', 'exec', 'k6-load-tester',
+            'pkill', '-f', 'k6'
+        ]
         
-        logger.info(
-            "Load test stopped",
-            **add_structured_context(
-                test_id=result.get('test_id'),
-                elapsed=result.get('elapsed')
-            )
-        )
+        process = subprocess.run(stop_command, capture_output=True, text=True, timeout=10)
+        
+        # Clean up active test state from cache
+        try:
+            from src.services.cache_service import cache_service
+            active_test_id = cache_service.get_value("k6_active_test")
+            if active_test_id:
+                cache_service.delete_value(f"k6_test_state:{active_test_id}")
+                cache_service.delete_value("k6_active_test")
+                logger.info(f"Cleaned up test state for {active_test_id}")
+        except Exception as cache_error:
+            logger.warning(f"Failed to clean up cache: {cache_error}")
         
         return jsonify({
             'success': True,
-            'test_id': result.get('test_id'),
             'status': 'stopped',
-            'elapsed': result.get('elapsed'),
+            'message': 'All k6 load tests stopped successfully',
+            'correlation_id': get_correlation_id()
+        }), 200
+
+    except subprocess.TimeoutExpired:
+        logger.error("k6 stop command timed out")
+        return jsonify({
+            'success': False,
+            'error': 'k6 stop command timed out',
+            'correlation_id': get_correlation_id()
+        }), 500
+    except Exception as e:
+        logger.error(f"Failed to stop k6 load test: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/load-test/status', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_load_test_status():
+    """Get current k6 load test status with real-time information"""
+    try:
+        import subprocess
+        import time
+        
+        # Check if k6 process is running in container
+        check_command = [
+            'docker', 'exec', 'k6-load-tester',
+            'pgrep', '-f', 'k6'
+        ]
+        
+        process = subprocess.run(check_command, capture_output=True, text=True, timeout=5)
+        is_k6_running = process.returncode == 0
+        
+        # Get test state from cache
+        test_state = None
+        active_test_id = None
+        
+        try:
+            from src.services.cache_service import cache_service
+            active_test_id = cache_service.get_value("k6_active_test")
+            if active_test_id:
+                test_state = cache_service.get_value(f"k6_test_state:{active_test_id}")
+        except Exception as cache_error:
+            logger.warning(f"Failed to get test state from cache: {cache_error}")
+        
+        if test_state and is_k6_running:
+            # Calculate progress
+            current_time = time.time()
+            elapsed = current_time - test_state['start_time']
+            duration = test_state['configuration']['duration']
+            progress = min(100, (elapsed / (duration + 60)) * 100)  # Include ramp-up/down
+            
+            # Check if test should be finished
+            if current_time > test_state['expected_end_time']:
+                is_k6_running = False
+                status = 'completed'
+            else:
+                status = 'running'
+            
+            return jsonify({
+                'success': True,
+                'status': status,
+                'test_id': active_test_id,
+                'active_tests': 1,
+                'progress': round(progress, 1),
+                'elapsed_time': round(elapsed, 1),
+                'remaining_time': max(0, round(test_state['expected_end_time'] - current_time, 1)),
+                'configuration': test_state['configuration'],
+                'is_k6_running': is_k6_running,
+                'message': f'k6 test {active_test_id} is {status}',
+                'correlation_id': get_correlation_id()
+            }), 200
+        
+        elif test_state and not is_k6_running:
+            # Test finished, clean up
+            try:
+                from src.services.cache_service import cache_service
+                cache_service.delete_value(f"k6_test_state:{active_test_id}")
+                cache_service.delete_value("k6_active_test")
+            except Exception:
+                pass
+            
+            return jsonify({
+                'success': True,
+                'status': 'completed',
+                'test_id': active_test_id,
+                'active_tests': 0,
+                'message': f'k6 test {active_test_id} completed',
+                'correlation_id': get_correlation_id()
+            }), 200
+        
+        else:
+            # No active tests
+            return jsonify({
+                'success': True,
+                'status': 'idle',
+                'active_tests': 0,
+                'is_k6_running': is_k6_running,
+                'message': 'No active k6 load tests',
+                'correlation_id': get_correlation_id()
+            }), 200
+
+    except subprocess.TimeoutExpired:
+        logger.error("k6 status check timed out")
+        return jsonify({
+            'success': False,
+            'error': 'k6 status check timed out',
+            'correlation_id': get_correlation_id()
+        }), 500
+    except Exception as e:
+        logger.error(f"Failed to get k6 load test status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/load-test/test', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def test_k6_endpoint():
+    """Simple test endpoint to verify k6 API routing"""
+    return jsonify({
+        'success': True,
+        'message': 'k6 Test endpoint working',
+        'correlation_id': get_correlation_id()
+    }), 200
+
+@analytics_bp.route('/load-test/scenarios', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_load_test_scenarios():
+    """Get available k6 load test scenarios and their configurations"""
+    return jsonify({
+        'success': True,
+        'message': 'k6 scenarios endpoint working',
+        'correlation_id': get_correlation_id()
+    }), 200
+
+@analytics_bp.route('/load-test/metrics', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_load_test_results():
+    """Get k6 load test results from Prometheus metrics"""
+    try:
+        import requests
+        import time
+        
+        # Query Prometheus for k6 metrics
+        prometheus_url = "http://prometheus:9090"
+        
+        # Get recent k6 metrics (last 5 minutes)
+        end_time = time.time()
+        start_time = end_time - 300  # 5 minutes ago
+        
+        queries = {
+            'request_rate': 'rate(k6_http_reqs_total[1m])',
+            'error_rate': 'rate(k6_http_reqs_total{status!~"2.."}[1m]) / rate(k6_http_reqs_total[1m])',
+            'response_time_p95': 'k6_http_req_duration{quantile="0.95"}',
+            'response_time_avg': 'k6_http_req_duration{quantile="0.5"}',
+            'active_vus': 'k6_vus'
+        }
+        
+        metrics = {}
+        
+        for metric_name, query in queries.items():
+            try:
+                response = requests.get(
+                    f"{prometheus_url}/api/v1/query",
+                    params={
+                        'query': query,
+                        'time': end_time
+                    },
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data['status'] == 'success' and data['data']['result']:
+                        metrics[metric_name] = {
+                            'value': float(data['data']['result'][0]['value'][1]),
+                            'timestamp': data['data']['result'][0]['value'][0]
+                        }
+                    else:
+                        metrics[metric_name] = {'value': 0, 'timestamp': end_time}
+                else:
+                    metrics[metric_name] = {'value': 0, 'timestamp': end_time}
+                    
+            except Exception as query_error:
+                logger.warning(f"Failed to query {metric_name}: {query_error}")
+                metrics[metric_name] = {'value': 0, 'timestamp': end_time}
+        
+        return jsonify({
+            'success': True,
+            'metrics': metrics,
+            'timestamp': end_time,
+            'prometheus_available': True,
+            'correlation_id': get_correlation_id()
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Failed to get k6 load test metrics: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'metrics': {
+                'request_rate': {'value': 0, 'timestamp': time.time()},
+                'error_rate': {'value': 0, 'timestamp': time.time()},
+                'response_time_p95': {'value': 0, 'timestamp': time.time()},
+                'response_time_avg': {'value': 0, 'timestamp': time.time()},
+                'active_vus': {'value': 0, 'timestamp': time.time()}
+            },
+            'prometheus_available': False,
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/artillery/start', methods=['POST'])
+@correlation_id_required
+@log_function_call()
+def start_artillery_test():
+    """Start Artillery user journey test with specified scenario"""
+    try:
+        import subprocess
+        import json
+        import os
+        
+        # Get configuration from request
+        config = request.get_json() or {}
+        scenario = config.get('scenario', 'complete-purchase-flow')  # Default scenario
+        duration = config.get('duration', 300)  # 5 minutes default
+        arrival_rate = config.get('arrivalRate', 10)
+        ramp_to = config.get('rampTo', 20)
+        
+        # Available Artillery scenarios
+        available_scenarios = {
+            'complete-purchase-flow': 'complete-purchase-flow.yml',
+            'anonymous-to-purchase': 'anonymous-to-purchase.yml',
+            'quick-purchase': 'complete-purchase-flow.yml',  # Use same script, different config
+        }
+        
+        if scenario not in available_scenarios:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid scenario. Available: {list(available_scenarios.keys())}',
+                'correlation_id': get_correlation_id()
+            }), 400
+        
+        script_file = available_scenarios[scenario]
+        
+        # Create temporary config override if needed
+        temp_config = {
+            'config': {
+                'target': 'http://api-gateway',
+                'phases': [
+                    {
+                        'duration': duration,
+                        'arrivalRate': arrival_rate,
+                        'rampTo': ramp_to,
+                        'name': f'Custom {scenario} test'
+                    }
+                ]
+            }
+        }
+        
+        # Docker command to run Artillery
+        docker_cmd = [
+            'docker', 'exec', 'artillery-user-journey',
+            'artillery', 'run',
+            f'/scripts/{script_file}',
+            '--output', f'/tmp/artillery-results-{scenario}-{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        ]
+        
+        # Start Artillery in background
+        process = subprocess.Popen(
+            docker_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Store test metadata
+        test_metadata = {
+            'test_id': f'artillery-{scenario}-{datetime.now().strftime("%Y%m%d_%H%M%S")}',
+            'scenario': scenario,
+            'script_file': script_file,
+            'config': config,
+            'status': 'running',
+            'start_time': datetime.now().isoformat(),
+            'process_id': process.pid,
+            'expected_duration': duration,
+            'correlation_id': get_correlation_id()
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': f'Artillery {scenario} test started successfully',
+            'test_metadata': test_metadata,
+            'correlation_id': get_correlation_id()
+        }), 200
+        
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to start Artillery test: {str(e)}',
+            'correlation_id': get_correlation_id()
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/artillery/scenarios', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_artillery_scenarios():
+    """Get available Artillery user journey scenarios"""
+    try:
+        scenarios = {
+            'complete-purchase-flow': {
+                'name': 'Complete Purchase Journey',
+                'description': 'Full user registration, product browsing, cart management, and checkout flow',
+                'script': 'complete-purchase-flow.yml',
+                'estimated_duration': '10-20 minutes per user journey',
+                'user_scenarios': [
+                    'Complete Purchase Journey (70% weight)',
+                    'Quick Browse and Exit (20% weight)', 
+                    'Returning User Quick Purchase (10% weight)'
+                ],
+                'key_metrics': [
+                    'User registration conversion rate',
+                    'Cart abandonment rate',
+                    'End-to-end purchase completion time',
+                    'Payment processing success rate'
+                ],
+                'recommended_config': {
+                    'duration': 600,
+                    'arrivalRate': 10,
+                    'rampTo': 20
+                }
+            },
+            'anonymous-to-purchase': {
+                'name': 'Anonymous Browse to Purchase',
+                'description': 'Anonymous users browsing and converting to registered buyers',
+                'script': 'anonymous-to-purchase.yml',
+                'estimated_duration': '5-15 minutes per user journey',
+                'user_scenarios': [
+                    'Anonymous Browse to Purchase (60% weight)',
+                    'Anonymous Browse and Abandon (30% weight)',
+                    'Anonymous Research Heavy Browse (10% weight)'
+                ],
+                'key_metrics': [
+                    'Anonymous to registered conversion rate',
+                    'Browse abandonment patterns',
+                    'Search behavior analysis',
+                    'Registration trigger points'
+                ],
+                'recommended_config': {
+                    'duration': 300,
+                    'arrivalRate': 15,
+                    'rampTo': 25
+                }
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'scenarios': scenarios,
             'correlation_id': get_correlation_id()
         }), 200
         
     except Exception as e:
-        logger.error(
-            "Failed to stop load test",
-            **add_structured_context(error=str(e)),
-            exc_info=True
-        )
         return jsonify({
-            'error': 'Failed to stop load test',
-            'message': str(e),
+            'success': False,
+            'error': f'Failed to retrieve scenarios: {str(e)}',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/artillery/status', methods=['GET'])
+@correlation_id_required  
+@log_function_call()
+def get_artillery_status():
+    """Get current Artillery test status and running processes"""
+    try:
+        import subprocess
+        
+        # Check for running artillery processes
+        docker_cmd = ['docker', 'exec', 'artillery-user-journey', 'ps', 'aux']
+        
+        try:
+            result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=10)
+            processes = result.stdout
+            
+            # Look for artillery processes
+            artillery_running = 'artillery' in processes and 'run' in processes
+            
+            # Get container stats
+            stats_cmd = ['docker', 'stats', 'artillery-user-journey', '--no-stream', '--format', 'json']
+            stats_result = subprocess.run(stats_cmd, capture_output=True, text=True, timeout=5)
+            
+            container_stats = {}
+            if stats_result.returncode == 0:
+                try:
+                    container_stats = json.loads(stats_result.stdout)
+                except:
+                    container_stats = {'error': 'Failed to parse stats'}
+            
+            status_info = {
+                'artillery_running': artillery_running,
+                'container_status': 'running' if artillery_running else 'idle',
+                'container_stats': container_stats,
+                'processes': processes.split('\\n') if processes else [],
+                'timestamp': datetime.now().isoformat(),
+                'correlation_id': get_correlation_id()
+            }
+            
+            return jsonify({
+                'success': True,
+                'status': status_info,
+                'correlation_id': get_correlation_id()
+            }), 200
+            
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                'success': False,
+                'error': 'Timeout while checking Artillery status',
+                'correlation_id': get_correlation_id()
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get Artillery status: {str(e)}',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/artillery/stop', methods=['POST'])
+@correlation_id_required
+@log_function_call()
+def stop_artillery_test():
+    """Stop any running Artillery tests"""
+    try:
+        import subprocess
+        
+        # Kill artillery processes in container
+        kill_cmd = ['docker', 'exec', 'artillery-user-journey', 'pkill', '-f', 'artillery']
+        
+        try:
+            subprocess.run(kill_cmd, capture_output=True, text=True, timeout=10)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Artillery tests stopped successfully',
+                'correlation_id': get_correlation_id()
+            }), 200
+            
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                'success': False,
+                'error': 'Timeout while stopping Artillery',
+                'correlation_id': get_correlation_id()
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to stop Artillery tests: {str(e)}',
+            'correlation_id': get_correlation_id()
+        }), 500
+
+@analytics_bp.route('/artillery/results/<test_id>', methods=['GET'])
+@correlation_id_required
+@log_function_call()
+def get_artillery_results(test_id):
+    """Get Artillery test results for a specific test ID"""
+    try:
+        import subprocess
+        import json
+        
+        # Look for result files in container
+        find_cmd = ['docker', 'exec', 'artillery-user-journey', 'find', '/tmp', '-name', f'*{test_id}*.json']
+        
+        result = subprocess.run(find_cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode != 0 or not result.stdout.strip():
+            return jsonify({
+                'success': False,
+                'error': f'No results found for test ID: {test_id}',
+                'correlation_id': get_correlation_id()
+            }), 404
+        
+        result_file = result.stdout.strip().split('\\n')[0]  # Get first match
+        
+        # Read the result file
+        cat_cmd = ['docker', 'exec', 'artillery-user-journey', 'cat', result_file]
+        cat_result = subprocess.run(cat_cmd, capture_output=True, text=True, timeout=10)
+        
+        if cat_result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to read results file: {result_file}',
+                'correlation_id': get_correlation_id()
+            }), 500
+        
+        try:
+            test_results = json.loads(cat_result.stdout)
+            
+            return jsonify({
+                'success': True,
+                'test_id': test_id,
+                'results': test_results,
+                'result_file': result_file,
+                'correlation_id': get_correlation_id()
+            }), 200
+            
+        except json.JSONDecodeError:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid JSON in results file',
+                'correlation_id': get_correlation_id()
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to retrieve results: {str(e)}',
             'correlation_id': get_correlation_id()
         }), 500
 

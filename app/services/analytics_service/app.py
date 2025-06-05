@@ -171,7 +171,15 @@ def create_app(config_name: str = None) -> Flask:
                 'aggregations': '/api/v1/analytics/aggregations/{period}',
                 'load_test_metrics': '/api/v1/analytics/metrics/load-test',
                 'load_test_start': '/api/v1/analytics/load-test/start',
-                'load_test_stop': '/api/v1/analytics/load-test/stop'
+                'load_test_stop': '/api/v1/analytics/load-test/stop',
+                'load_test_status': '/api/v1/analytics/load-test/status',
+                'load_test_scenarios': '/api/v1/analytics/load-test/scenarios',
+                'load_test_results': '/api/v1/analytics/load-test/results/{test_id}',
+                'artillery_start': '/api/v1/analytics/artillery/start',
+                'artillery_stop': '/api/v1/analytics/artillery/stop', 
+                'artillery_status': '/api/v1/analytics/artillery/status',
+                'artillery_scenarios': '/api/v1/analytics/artillery/scenarios',
+                'artillery_results': '/api/v1/analytics/artillery/results/{test_id}'
             }
         })
     

@@ -27,16 +27,18 @@ type OrderService struct {
 	cartRepo       *db.CartRepository
 	cartService    *CartService
 	eventPublisher *EventPublisher
+	productClient  *ProductServiceClient
 	logger         *logrus.Logger
 }
 
 // NewOrderService creates a new order service
-func NewOrderService(orderRepo *db.OrderRepository, cartRepo *db.CartRepository, cartService *CartService, eventPublisher *EventPublisher, logger *logrus.Logger) *OrderService {
+func NewOrderService(orderRepo *db.OrderRepository, cartRepo *db.CartRepository, cartService *CartService, eventPublisher *EventPublisher, productClient *ProductServiceClient, logger *logrus.Logger) *OrderService {
 	return &OrderService{
 		orderRepo:      orderRepo,
 		cartRepo:       cartRepo,
 		cartService:    cartService,
 		eventPublisher: eventPublisher,
+		productClient:  productClient,
 		logger:         logger,
 	}
 }
@@ -53,18 +55,64 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod st
 		return nil, ErrCartEmpty
 	}
 
-	// Create order items from cart items
+	// Validate all products in cart using Product Service with Circuit Breaker
 	var orderItems []models.OrderItem
+	var validationErrors []string
+
 	for _, cartItem := range cart.Items {
+		// Validate product availability and stock (with circuit breaker)
+		isValid, product, validationErr := s.productClient.ValidateProduct(ctx, cartItem.ProductID, cartItem.Quantity)
+
+		if validationErr != nil {
+			s.logger.WithFields(logrus.Fields{
+				"product_id": cartItem.ProductID,
+				"quantity":   cartItem.Quantity,
+				"error":      validationErr.Error(),
+			}).Warn("Product validation failed, using fallback")
+			// Continue with fallback validation result
+		}
+
+		if !isValid {
+			validationErrors = append(validationErrors, fmt.Sprintf("Product %s: insufficient stock (requested: %d)", cartItem.ProductID, cartItem.Quantity))
+			continue
+		}
+
+		// Use validated product info if available, otherwise use cart item info
+		productName := cartItem.ProductName
+		productPrice := cartItem.Price
+		productCategory := cartItem.Category
+
+		if product != nil {
+			productName = product.Name
+			productPrice = product.Price
+			productCategory = product.Category
+
+			s.logger.WithFields(logrus.Fields{
+				"product_id": cartItem.ProductID,
+				"validated":  true,
+				"stock":      product.StockCount,
+			}).Info("Product validation successful")
+		}
+
 		orderItem := models.OrderItem{
 			ProductID:   cartItem.ProductID,
-			ProductName: cartItem.ProductName,
-			Price:       cartItem.Price,
+			ProductName: productName,
+			Price:       productPrice,
 			Quantity:    cartItem.Quantity,
-			Category:    cartItem.Category,
-			Subtotal:    cartItem.Price * float64(cartItem.Quantity),
+			Category:    productCategory,
+			Subtotal:    productPrice * float64(cartItem.Quantity),
 		}
 		orderItems = append(orderItems, orderItem)
+	}
+
+	// If any products failed validation, return error
+	if len(validationErrors) > 0 {
+		return nil, fmt.Errorf("product validation failed: %v", validationErrors)
+	}
+
+	// If no valid items remain after validation, return error
+	if len(orderItems) == 0 {
+		return nil, fmt.Errorf("no valid products remaining after validation")
 	}
 
 	// Create order
@@ -96,11 +144,13 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID, paymentMethod st
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"orderId":     order.OrderID,
-		"userId":      order.UserID,
-		"totalAmount": order.TotalAmount,
-		"itemCount":   len(order.Items),
-	}).Info("Order created successfully")
+		"orderId":             order.OrderID,
+		"userId":              order.UserID,
+		"totalAmount":         order.TotalAmount,
+		"itemCount":           len(order.Items),
+		"validationUsed":      true,
+		"circuitBreakerState": s.productClient.GetCircuitBreakerState().String(),
+	}).Info("Order created successfully with product validation")
 
 	return order, nil
 }
