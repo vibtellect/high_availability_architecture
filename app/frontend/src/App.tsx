@@ -6,15 +6,12 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
-import { CartProvider } from './context/CartContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import useErrorHandler from './hooks/useErrorHandler';
 
-// Pages
+// Pages - Demo-focused
 import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
-import CartPage from './pages/CartPage';
-import CheckoutPage from './pages/CheckoutPage';
 import HighAvailabilityDashboard from './pages/HighAvailabilityDashboard';
 
 // Create a client for React Query with enhanced error handling
@@ -64,46 +61,34 @@ const AppContent: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <CartProvider>
-          <Router>
-            <Box display="flex" flexDirection="column" minHeight="100vh">
-              <Header />
-              <Box component="main" flexGrow={1}>
-                <ErrorBoundary>
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/products" element={<ProductsPage />} />
-                    <Route path="/shop" element={<ProductsPage />} />
-                    <Route path="/cart" element={<CartPage />} />
-                    <Route path="/checkout" element={<CheckoutPage />} />
-                    
-                    {/* High Availability Dashboard - Main Demo Route */}
-                    <Route path="/dashboard" element={<HighAvailabilityDashboard />} />
-                    <Route path="/architecture" element={<HighAvailabilityDashboard />} />
-                    <Route path="/ha-dashboard" element={<HighAvailabilityDashboard />} />
-                    
-                    {/* Placeholder routes for future implementation */}
-                    <Route path="/profile" element={<div>Profile Page - Coming Soon</div>} />
-                    <Route path="/orders" element={<div>Orders Page - Coming Soon</div>} />
-                    <Route path="/wishlist" element={<div>Wishlist Page - Coming Soon</div>} />
-                    
-                    {/* 404 Page */}
-                    <Route 
-                      path="*" 
-                      element={
-                        <div style={{ textAlign: 'center', padding: '2rem' }}>
-                          <h1>404 - Seite nicht gefunden</h1>
-                          <p>Die angeforderte Seite existiert nicht.</p>
-                        </div>
-                      } 
-                    />
-                  </Routes>
-                </ErrorBoundary>
-              </Box>
-              <Footer />
+        <Router>
+          <Box display="flex" flexDirection="column" minHeight="100vh">
+            <Header />
+            <Box component="main" flexGrow={1}>
+              <ErrorBoundary>
+                <Routes>
+                  {/* Demo-focused routes */}
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/products" element={<ProductsPage />} />
+                  <Route path="/dashboard" element={<HighAvailabilityDashboard />} />
+                  <Route path="/architecture" element={<HighAvailabilityDashboard />} />
+                  
+                  {/* 404 Page */}
+                  <Route 
+                    path="*" 
+                    element={
+                      <div style={{ textAlign: 'center', padding: '2rem' }}>
+                        <h1>404 - Seite nicht gefunden</h1>
+                        <p>Die angeforderte Seite existiert nicht.</p>
+                      </div>
+                    } 
+                  />
+                </Routes>
+              </ErrorBoundary>
             </Box>
-          </Router>
-        </CartProvider>
+            <Footer />
+          </Box>
+        </Router>
       </ThemeProvider>
       {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
