@@ -1,0 +1,112 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: auto-scaling-demo-aws-eks
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Base resources to include
+resources:
+  - ../../base/product-service.yaml
+  - ../../base/observability.yaml
+  - ../../demo/product-service-demo.yaml
+  - ../../demo/k6-load-test-job.yaml
+
+# Namespace for all resources
+namespace: default
+
+# Common labels applied to all resources
+commonLabels:
+  environment: aws-eks
+  demo: auto-scaling
+  app.kubernetes.io/part-of: high-availability-demo
+
+# AWS-specific patches
+patches:
+  # Patch HPA for AWS EKS optimizations
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: product-service-demo-hpa
+    patch: |-
+      - op: replace
+        path: /spec/behavior/scaleUp/stabilizationWindowSeconds
+        value: 30
+      - op: replace
+        path: /spec/behavior/scaleDown/stabilizationWindowSeconds
+        value: 300
+      - op: add
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: ""
+          
+  # Patch Deployment for AWS EKS
+  - target:
+      kind: Deployment
+      name: product-service-demo
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          kubernetes.io/arch: amd64
+          node.kubernetes.io/instance-type: t3.medium
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: "node.kubernetes.io/not-ready"
+            operator: "Exists"
+            effect: "NoExecute"
+            tolerationSeconds: 300
+          - key: "node.kubernetes.io/unreachable"
+            operator: "Exists"
+            effect: "NoExecute"
+            tolerationSeconds: 300
+      - op: add
+        path: /metadata/annotations
+        value:
+          deployment.kubernetes.io/revision: "1"
+          eks.amazonaws.com/fargate-profile: "default"
+
+  # k6 Job patches for AWS
+  - target:
+      kind: Job
+      name: k6-auto-scaling-test
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          kubernetes.io/arch: amd64
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "http://product-service-demo.default.svc.cluster.local"
+
+# ConfigMap generator for AWS-specific settings
+configMapGenerator:
+  - name: aws-config
+    literals:
+      - AWS_REGION=us-west-2
+      - EKS_CLUSTER_NAME=ha-demo-cluster
+      - ENVIRONMENT=aws-eks
+      - DEMO_TYPE=auto-scaling
+
+# Secret generator for AWS credentials (placeholder)
+secretGenerator:
+  - name: aws-credentials
+    type: Opaque
+    literals:
+      - AWS_ACCESS_KEY_ID=placeholder
+      - AWS_SECRET_ACCESS_KEY=placeholder
+
+# Images with AWS ECR registry (example)
+images:
+  - name: product-service
+    newName: 123456789012.dkr.ecr.us-west-2.amazonaws.com/product-service
+    newTag: latest
+  - name: grafana/k6
+    newName: grafana/k6
+    newTag: latest  # Keep k6 from Docker Hub
+
+# Replica count patches for AWS environment
+replicas:
+  - name: product-service-demo
+    count: 1  # Start with 1 for cost optimization 

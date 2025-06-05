@@ -1,0 +1,193 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-test-script
+  namespace: default
+data:
+  auto-scaling-test.js: |
+    import http from 'k6/http';
+    import { check, sleep, group } from 'k6';
+    import { Rate, Counter, Trend, Gauge } from 'k6/metrics';
+
+    // Custom metrics for Kubernetes monitoring
+    export const errorRate = new Rate('k6_errors');
+    export const requestDuration = new Trend('k6_request_duration');
+    export const requestCounter = new Counter('k6_requests_total');
+    export const activeVUs = new Gauge('k6_active_vus');
+
+    // Aggressive test configuration for auto-scaling
+    export const options = {
+      scenarios: {
+        // Ramping pattern to trigger HPA scaling
+        auto_scaling_test: {
+          executor: 'ramping-vus',
+          stages: [
+            { duration: '1m', target: 10 },   // Ramp up to 10 VUs
+            { duration: '3m', target: 50 },   // Heavy load to trigger scaling
+            { duration: '2m', target: 100 },  // Peak load for max scaling
+            { duration: '2m', target: 50 },   // Maintain load
+            { duration: '1m', target: 0 },    // Scale down
+          ],
+        },
+      },
+      thresholds: {
+        http_req_duration: ['p(95)<2000'],
+        http_req_failed: ['rate<0.1'],
+        k6_errors: ['rate<0.1'],
+      },
+      // Output to Prometheus for Kubernetes monitoring
+      ext: {
+        prometheus: {
+          namespace: 'k6',
+          subsystem: 'load_test',
+        },
+      },
+    };
+
+    const BASE_URL = __ENV.TARGET_SERVICE || 'http://product-service-demo';
+    const TEST_DURATION = __ENV.TEST_DURATION || '9m';
+
+    export function setup() {
+      console.log('🚀 k6 Kubernetes Auto-Scaling Load Test');
+      console.log(`Target: ${BASE_URL}`);
+      console.log(`Duration: ${TEST_DURATION}`);
+      
+      // Health check before starting
+      const healthResponse = http.get(`${BASE_URL}/actuator/health`, { timeout: '10s' });
+      if (healthResponse.status !== 200) {
+        console.warn(`⚠️ Service may not be ready: ${healthResponse.status}`);
+      } else {
+        console.log('✅ Target service is healthy');
+      }
+      
+      return { startTime: new Date() };
+    }
+
+    export default function () {
+      activeVUs.add(1);
+      
+      group('Product Service Load Test', () => {
+        // Main API endpoint
+        const response = http.get(`${BASE_URL}/api/v1/products`, {
+          timeout: '30s',
+          tags: { endpoint: 'products' },
+        });
+        
+        requestCounter.add(1);
+        requestDuration.add(response.timings.duration);
+        
+        const success = check(response, {
+          'status is 200': (r) => r.status === 200,
+          'response time < 2s': (r) => r.timings.duration < 2000,
+          'has products data': (r) => r.body && r.body.length > 0,
+        });
+        
+        errorRate.add(!success);
+        
+        if (!success) {
+          console.log(`❌ Request failed: ${response.status} - ${response.body.substring(0, 100)}`);
+        }
+        
+        // Add CPU-intensive requests
+        if (__VU % 2 === 0) {
+          // Health check requests
+          http.get(`${BASE_URL}/actuator/health`, { timeout: '10s' });
+          requestCounter.add(1);
+        }
+        
+        if (__VU % 3 === 0) {
+          // Featured products (more CPU intensive)
+          http.get(`${BASE_URL}/api/v1/products/featured`, { timeout: '15s' });
+          requestCounter.add(1);
+        }
+      });
+      
+      // Shorter sleep for more intensive load
+      sleep(0.1 + Math.random() * 0.5);
+    }
+
+    export function teardown(data) {
+      const endTime = new Date();
+      const duration = (endTime - data.startTime) / 1000;
+      console.log(`🏁 k6 Auto-Scaling Test completed in ${duration}s`);
+    }
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-auto-scaling-test
+  labels:
+    app: k6-load-test
+    test-type: auto-scaling
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: k6-load-test
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          echo "🚀 Starting k6 Auto-Scaling Load Test"
+          echo "Target: $TARGET_SERVICE"
+          echo "Duration: $TEST_DURATION"
+          echo "Current time: $(date)"
+          
+          # Run the load test
+          k6 run \
+            --out experimental-prometheus-rw=http://prometheus:9090/api/v1/write \
+            --tag testid=auto-scaling-$(date +%s) \
+            --tag environment=kubernetes \
+            /scripts/auto-scaling-test.js
+          
+          echo "✅ k6 Auto-Scaling Test completed at $(date)"
+        env:
+        - name: TARGET_SERVICE
+          value: "http://product-service-demo"
+        - name: TEST_DURATION
+          value: "9m"
+        - name: K6_PROMETHEUS_RW_SERVER_URL
+          value: "http://prometheus:9090/api/v1/write"
+        - name: K6_PROMETHEUS_RW_TREND_STATS
+          value: "p(95),p(99),min,max,avg,med"
+        - name: K6_PROMETHEUS_RW_PUSH_INTERVAL
+          value: "5s"
+        volumeMounts:
+        - name: k6-script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+      volumes:
+      - name: k6-script
+        configMap:
+          name: k6-test-script
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k6-metrics
+  labels:
+    app: k6-load-test
+spec:
+  ports:
+  - port: 6565
+    name: metrics
+  selector:
+    app: k6-load-test
+  type: ClusterIP 

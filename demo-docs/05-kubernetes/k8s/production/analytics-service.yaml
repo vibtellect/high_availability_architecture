@@ -1,0 +1,230 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: production
+  labels:
+    app: analytics-service
+    version: v1
+    tier: backend
+    environment: production
+    app.kubernetes.io/name: analytics-service
+    app.kubernetes.io/part-of: high-availability-demo
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: analytics-service
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+        version: v1
+        tier: backend
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: analytics-service
+        image: analytics-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8083
+          name: http
+          protocol: TCP
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: PORT
+          value: "8083"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: AWS_REGION
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: region
+        - name: AWS_DYNAMODB_ENDPOINT
+          value: "http://localstack:4566"
+        - name: AWS_SNS_ENDPOINT
+          value: "http://localstack:4566"
+        - name: AWS_SQS_ENDPOINT
+          value: "http://localstack:4566"
+        - name: ANALYTICS_EVENTS_TABLE
+          value: "analytics-events"
+        - name: ANALYTICS_METRICS_TABLE
+          value: "analytics-metrics"
+        - name: ANALYTICS_AGGREGATIONS_TABLE
+          value: "analytics-aggregations"
+        - name: ANALYTICS_TOPIC_ARN
+          value: "arn:aws:sns:eu-central-1:000000000000:analytics-events"
+        - name: PRODUCT_EVENTS_QUEUE
+          value: "product-events-queue"
+        - name: USER_EVENTS_QUEUE
+          value: "user-events-queue"
+        - name: CHECKOUT_EVENTS_QUEUE
+          value: "checkout-events-queue"
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: redis-password
+        - name: EVENTS_ENABLED
+          value: "true"
+        - name: BATCH_SIZE
+          value: "100"
+        - name: PROCESSING_INTERVAL
+          value: "30"
+        - name: PRODUCT_SERVICE_URL
+          value: "http://product-service"
+        - name: USER_SERVICE_URL
+          value: "http://user-service"
+        - name: CHECKOUT_SERVICE_URL
+          value: "http://checkout-service"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: CORS_ALLOWED_ORIGINS
+          value: "https://app.example.com,https://admin.example.com"
+        - name: PYTHONPATH
+          value: "/app"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "750m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8083
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+          successThreshold: 1
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: production
+  labels:
+    app: analytics-service
+    environment: production
+    tier: backend
+spec:
+  ports:
+  - port: 80
+    targetPort: 8083
+    protocol: TCP
+    name: http
+  selector:
+    app: analytics-service
+  type: ClusterIP
+  sessionAffinity: None
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-service-hpa
+  namespace: production
+  labels:
+    app: analytics-service
+    environment: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analytics-service
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 120
+      selectPolicy: Min 

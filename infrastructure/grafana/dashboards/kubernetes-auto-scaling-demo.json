@@ -1,0 +1,353 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Kubernetes Auto-Scaling Demo",
+    "tags": ["kubernetes", "auto-scaling", "k6", "demo"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Pod Replicas Over Time",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "kube_deployment_status_replicas{deployment=\"product-service-demo\"}",
+            "legendFormat": "Current Replicas",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "displayMode": "basic",
+              "orientation": "horizontal"
+            },
+            "decimals": 0,
+            "max": 10,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 8}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 2,
+        "title": "HPA Target vs Current Replicas",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"product-service-demo-hpa\"}",
+            "legendFormat": "Desired Replicas",
+            "refId": "A"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"product-service-demo-hpa\"}",
+            "legendFormat": "Current Replicas",
+            "refId": "B"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler=\"product-service-demo-hpa\"}",
+            "legendFormat": "Max Replicas",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {"type": "linear"},
+              "showPoints": "always",
+              "spanNulls": false,
+              "stacking": {"group": "A", "mode": "none"},
+              "thresholdsStyle": {"mode": "off"}
+            },
+            "decimals": 0,
+            "max": 10,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 6, "y": 0},
+        "options": {
+          "legend": {"calcs": [], "displayMode": "visible", "placement": "bottom"},
+          "tooltip": {"mode": "single", "sort": "none"}
+        }
+      },
+      {
+        "id": 3,
+        "title": "CPU Utilization vs Target",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(rate(container_cpu_usage_seconds_total{pod=~\"product-service-demo-.*\",container=\"product-service\"}[1m])) * 100",
+            "legendFormat": "Current CPU %",
+            "refId": "A"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_spec_target_metric{horizontalpodautoscaler=\"product-service-demo-hpa\",metric_name=\"cpu\",metric_target_type=\"utilization\"}",
+            "legendFormat": "CPU Target %",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "CPU %",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "pointSize": 5,
+              "showPoints": "always"
+            },
+            "decimals": 1,
+            "max": 100,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 40},
+                {"color": "red", "value": 70}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 6},
+        "options": {
+          "legend": {"calcs": [], "displayMode": "visible", "placement": "bottom"},
+          "tooltip": {"mode": "single", "sort": "none"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "Memory Utilization vs Target",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(container_memory_working_set_bytes{pod=~\"product-service-demo-.*\",container=\"product-service\"} / container_spec_memory_limit_bytes{pod=~\"product-service-demo-.*\",container=\"product-service\"}) * 100",
+            "legendFormat": "Current Memory %",
+            "refId": "A"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_spec_target_metric{horizontalpodautoscaler=\"product-service-demo-hpa\",metric_name=\"memory\",metric_target_type=\"utilization\"}",
+            "legendFormat": "Memory Target %",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "Memory %",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "pointSize": 5,
+              "showPoints": "always"
+            },
+            "decimals": 1,
+            "max": 100,
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 5,
+        "title": "k6 Load Test Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "k6_http_reqs_total",
+            "legendFormat": "Total Requests",
+            "refId": "A"
+          },
+          {
+            "expr": "k6_active_vus",
+            "legendFormat": "Active VUs",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(k6_http_req_failed_total[1m]) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "pointSize": 5,
+              "showPoints": "always"
+            },
+            "decimals": 0,
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 12}
+      },
+      {
+        "id": 6,
+        "title": "Response Time Percentiles",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+            "legendFormat": "P50 Response Time",
+            "refId": "A"
+          },
+          {
+            "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+            "legendFormat": "P95 Response Time", 
+            "refId": "B"
+          },
+          {
+            "expr": "k6_http_req_duration{quantile=\"0.99\"}",
+            "legendFormat": "P99 Response Time",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisLabel": "Response Time",
+              "axisPlacement": "auto",
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "pointSize": 5,
+              "showPoints": "always"
+            },
+            "decimals": 0,
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18}
+      },
+      {
+        "id": 7,
+        "title": "Pod Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(kube_pod_status_phase{pod=~\"product-service-demo-.*\",phase=\"Running\"})",
+            "legendFormat": "Running Pods",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(kube_pod_status_phase{pod=~\"product-service-demo-.*\",phase=\"Pending\"})",
+            "legendFormat": "Pending Pods",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "decimals": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 18},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        }
+      },
+      {
+        "id": 8,
+        "title": "HPA Events",
+        "type": "logs",
+        "targets": [
+          {
+            "expr": "{kubernetes_pod_name=~\"product-service-demo-.*\"} |~ \"(?i)(scaled|scaling)\"",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "options": {
+          "showLabels": false,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true
+        }
+      }
+    ],
+    "time": {"from": "now-30m", "to": "now"},
+    "timepicker": {},
+    "templating": {"list": []},
+    "annotations": {"list": []},
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1,
+    "links": []
+  }
+} 

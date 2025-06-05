@@ -1,0 +1,119 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ha-demo-production
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: production
+
+resources:
+  # Core Infrastructure
+  - namespace.yaml
+  - persistent-storage.yaml
+  - secrets.yaml
+  
+  # Databases & Cache
+  - postgres.yaml
+  - redis.yaml
+  
+  # Microservices
+  - product-service.yaml
+  - user-service.yaml
+  - checkout-service.yaml
+  - analytics-service.yaml
+  
+  # Infrastructure Services
+  - localstack.yaml
+  
+  # Observability
+  - observability.yaml
+  
+  # Networking
+  - ingress.yaml
+
+commonLabels:
+  environment: production
+  project: high-availability-demo
+  version: v1.0.0
+
+commonAnnotations:
+  config.kubernetes.io/origin: |
+    path: demo-docs/05-kubernetes/k8s/production/kustomization.yaml
+  deployment.kubernetes.io/revision: "1"
+
+images:
+  - name: product-service
+    newTag: "1.0.0"
+  - name: user-service
+    newTag: "1.0.0"
+  - name: checkout-service
+    newTag: "1.0.0"
+  - name: analytics-service
+    newTag: "1.0.0"
+
+replicas:
+  - name: product-service
+    count: 3
+  - name: user-service
+    count: 3
+  - name: checkout-service
+    count: 3
+  - name: analytics-service
+    count: 3
+
+patches:
+  # Security patches
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/securityContext/runAsNonRoot
+        value: true
+      - op: add
+        path: /spec/template/spec/securityContext/readOnlyRootFilesystem
+        value: false
+    target:
+      kind: Deployment
+      labelSelector: "tier=backend"
+  
+  # Resource optimization patches
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+    target:
+      kind: Deployment
+      labelSelector: "app in (product-service,user-service)"
+  
+  # HPA optimization for production
+  - patch: |-
+      - op: replace
+        path: /spec/metrics/0/resource/target/averageUtilization
+        value: 70
+      - op: replace
+        path: /spec/metrics/1/resource/target/averageUtilization
+        value: 80
+    target:
+      kind: HorizontalPodAutoscaler
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=configs/prometheus.yml
+  - name: grafana-provisioning
+    files:
+      - datasources.yml=configs/grafana-datasources.yml
+      - dashboards.yml=configs/grafana-dashboards.yml
+  - name: grafana-dashboards
+    files:
+      - ha-architecture-overview.json=../../../grafana/dashboards/ha-architecture-overview.json
+
+secretGenerator:
+  - name: production-env-secrets
+    envs:
+      - .env.production
+    options:
+      disableNameSuffixHash: true 
