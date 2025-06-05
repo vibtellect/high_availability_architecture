@@ -9,15 +9,39 @@ import java.time.Instant
 @Service
 class ProductService(
     private val productRepository: ProductRepository,
-    private val eventPublisher: ProductEventPublisher
+    private val eventPublisher: ProductEventPublisher,
+    private val externalServiceClient: ExternalServiceClient
 ) {
 
     fun getAllProducts(): List<Product> {
-        return productRepository.findAll()
+        val products = productRepository.findAll()
+        
+        // Send analytics event for product listing
+        val analyticsEvent = mapOf(
+            "event_type" to "product_view",
+            "product_count" to products.size,
+            "timestamp" to Instant.now().toString()
+        )
+        externalServiceClient.sendAnalyticsEvent(analyticsEvent)
+        
+        return products
     }
 
     fun getProductById(productId: String): Product? {
-        return productRepository.findById(productId)
+        val product = productRepository.findById(productId)
+        
+        // Send analytics event for product view
+        if (product != null) {
+            val analyticsEvent = mapOf(
+                "event_type" to "product_view",
+                "product_id" to productId,
+                "product_name" to product.name,
+                "timestamp" to Instant.now().toString()
+            )
+            externalServiceClient.sendAnalyticsEvent(analyticsEvent)
+        }
+        
+        return product
     }
 
     fun createProduct(product: Product): Product {
@@ -27,6 +51,16 @@ class ProductService(
         
         // Publish product created event
         eventPublisher.publishProductCreated(savedProduct)
+        
+        // Send analytics event
+        val analyticsEvent = mapOf(
+            "event_type" to "custom",
+            "custom_event" to "product_created",
+            "product_id" to savedProduct.productId,
+            "product_name" to savedProduct.name,
+            "timestamp" to Instant.now().toString()
+        )
+        externalServiceClient.sendAnalyticsEvent(analyticsEvent)
         
         return savedProduct
     }
@@ -43,6 +77,15 @@ class ProductService(
         // Publish product updated event with old product for comparison
         eventPublisher.publishProductUpdated(savedProduct, existingProduct)
         
+        // Send analytics event
+        val analyticsEvent = mapOf(
+            "event_type" to "custom",
+            "custom_event" to "product_updated",
+            "product_id" to productId,
+            "timestamp" to Instant.now().toString()
+        )
+        externalServiceClient.sendAnalyticsEvent(analyticsEvent)
+        
         return savedProduct
     }
 
@@ -55,6 +98,15 @@ class ProductService(
         
         // Publish product deleted event
         eventPublisher.publishProductDeleted(productId)
+        
+        // Send analytics event
+        val analyticsEvent = mapOf(
+            "event_type" to "custom",
+            "custom_event" to "product_deleted",
+            "product_id" to productId,
+            "timestamp" to Instant.now().toString()
+        )
+        externalServiceClient.sendAnalyticsEvent(analyticsEvent)
         
         return true
     }
@@ -103,5 +155,12 @@ class ProductService(
         eventPublisher.publishProductUpdated(savedProduct, existingProduct.copy(price = oldPrice))
         
         return savedProduct
+    }
+
+    /**
+     * Test method to validate user access
+     */
+    fun validateUserAccess(userId: String): Boolean {
+        return externalServiceClient.validateUser(userId)
     }
 } 
