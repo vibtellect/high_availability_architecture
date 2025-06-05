@@ -19,6 +19,9 @@ running_tests = {}
 def run_k6_test(test_type, duration=60, vus=5):
     """Run K6 test in Docker container"""
     try:
+        # Ensure numeric values for calculations
+        duration = int(duration)
+        vus = int(vus)
         if test_type == 'load-testing':
             cmd = [
                 'docker', 'exec', 'k6-load-tester', 
@@ -82,8 +85,8 @@ def start_load_testing():
             # If JSON parsing fails, use defaults
             pass
         
-        duration = data.get('duration', 60)
-        vus = data.get('vus', 5)
+        duration = int(data.get('duration', 60))
+        vus = int(data.get('vus', 5))
         
         if 'load-testing' in running_tests and running_tests['load-testing']['status'] == 'running':
             return jsonify({
