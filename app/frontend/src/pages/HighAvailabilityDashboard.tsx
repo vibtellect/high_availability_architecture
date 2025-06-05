@@ -53,7 +53,8 @@ import {
   Pause as PauseIcon,
   OpenInNew as OpenInNewIcon,
   AccessTime as AccessTimeIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  FlashOn as ElectricalIcon
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -72,6 +73,9 @@ import {
   Pie,
   Cell
 } from 'recharts';
+
+// Import Circuit Breaker Monitor component
+// import CircuitBreakerMonitor from '../components/CircuitBreakerMonitor';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -653,6 +657,7 @@ const HighAvailabilityDashboard: React.FC = () => {
           <Tab label="Load Testing" icon={<SpeedIcon />} />
           <Tab label="Chaos Engineering" icon={<ScienceIcon />} />
           <Tab label="Performance Monitoring" icon={<TimelineIcon />} />
+          <Tab label="Circuit Breakers" icon={<ElectricalIcon />} />
         </Tabs>
       </Box>
 
@@ -1347,6 +1352,62 @@ const HighAvailabilityDashboard: React.FC = () => {
                     </Button>
                   </Grid>
                 </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </TabPanel>
+
+      {/* Circuit Breaker Monitoring Tab */}
+      <TabPanel value={tabValue} index={4}>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ElectricalIcon color="primary" />
+                  Circuit Breaker Monitoring
+                </Typography>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Circuit Breaker monitoring infrastructure has been implemented at the backend level.
+                  This includes Prometheus metrics, Grafana dashboards, and Go service integration.
+                </Alert>
+                <Typography variant="body1" gutterBottom>
+                  ✅ <strong>Backend Implementation Complete:</strong>
+                </Typography>
+                <List>
+                  <ListItem>
+                    <ListItemText primary="Prometheus Alert Rules für Circuit Breaker Events" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText primary="Grafana Dashboard für Circuit Breaker Monitoring" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText primary="Go Service Metrics Integration (Checkout Service)" />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText primary="Circuit Breaker Metrics Middleware" />
+                  </ListItem>
+                </List>
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AssessmentIcon />}
+                    endIcon={<OpenInNewIcon />}
+                    onClick={() => openMonitoringTool('grafana')}
+                    sx={{ mr: 2 }}
+                  >
+                    View in Grafana
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<SecurityIcon />}
+                    endIcon={<OpenInNewIcon />}
+                    onClick={() => openMonitoringTool('prometheus')}
+                  >
+                    View Metrics in Prometheus
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
