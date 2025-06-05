@@ -1,0 +1,183 @@
+{
+  "chaos_scenarios": {
+    "service_termination": {
+      "enabled": true,
+      "recovery_timeout_seconds": 30,
+      "max_concurrent_failures": 2,
+      "exclude_critical_services": [],
+      "health_check_retries": 3,
+      "restart_policy": "always"
+    },
+    "database_chaos": {
+      "enabled": true,
+      "connection_timeout_seconds": 10,
+      "retry_attempts": 3,
+      "backoff_multiplier": 2.0,
+      "max_connections": 10,
+      "isolation_duration_seconds": 30
+    },
+    "network_chaos": {
+      "enabled": true,
+      "latency_ms": 500,
+      "packet_loss_percent": 5,
+      "bandwidth_limit_mbps": 10,
+      "duration_seconds": 60,
+      "jitter_ms": 100
+    },
+    "resource_exhaustion": {
+      "enabled": true,
+      "cpu_stress_percent": 80,
+      "memory_stress_mb": 512,
+      "disk_stress_mb": 100,
+      "duration_seconds": 120
+    }
+  },
+  "load_test_integration": {
+    "k6_command_template": "docker exec k6-load-testing k6 run --duration {duration}s --arrival-rate {rate} /scripts/{script}.js",
+    "artillery_command_template": "docker exec artillery-user-journey artillery run /scripts/{script}.yml --count {count}",
+    "default_duration_seconds": 300,
+    "default_arrival_rate": 10,
+    "chaos_injection_delay_seconds": 30,
+    "scenarios": {
+      "microservices-load-test": {
+        "type": "k6",
+        "script": "microservices-load-test",
+        "duration": 300,
+        "arrival_rate": 10
+      },
+      "complete-purchase-flow": {
+        "type": "artillery",
+        "script": "complete-purchase-flow",
+        "count": 5
+      },
+      "anonymous-to-purchase": {
+        "type": "artillery", 
+        "script": "anonymous-to-purchase",
+        "count": 3
+      }
+    }
+  },
+  "monitoring": {
+    "health_check_interval_seconds": 5,
+    "recovery_timeout_seconds": 60,
+    "metrics_collection_interval_seconds": 10,
+    "alert_thresholds": {
+      "service_unavailable_seconds": 30,
+      "error_rate_percent": 5.0,
+      "response_time_ms": 2000,
+      "cpu_usage_percent": 90,
+      "memory_usage_percent": 85
+    }
+  },
+  "safety": {
+    "max_chaos_duration_minutes": 10,
+    "emergency_stop_enabled": true,
+    "safe_mode_enabled": true,
+    "require_confirmation": false,
+    "excluded_time_windows": [
+      {
+        "start": "02:00",
+        "end": "06:00",
+        "timezone": "UTC",
+        "description": "Maintenance window"
+      }
+    ],
+    "circuit_breaker": {
+      "failure_threshold": 5,
+      "recovery_timeout_seconds": 60,
+      "half_open_max_calls": 3
+    }
+  },
+  "reporting": {
+    "output_format": "json",
+    "include_logs": true,
+    "include_metrics": true,
+    "include_screenshots": false,
+    "retention_days": 30,
+    "notification_webhooks": []
+  },
+  "services": {
+    "product-service": {
+      "health_endpoint": "http://localhost:8081/api/v1/products/health",
+      "container_name": "product-service",
+      "criticality": "high",
+      "dependencies": ["localstack"],
+      "recovery_strategy": "restart"
+    },
+    "user-service": {
+      "health_endpoint": "http://localhost:8082/api/v1/users/health", 
+      "container_name": "user-service",
+      "criticality": "high",
+      "dependencies": ["localstack"],
+      "recovery_strategy": "restart"
+    },
+    "checkout-service": {
+      "health_endpoint": "http://localhost:8080/api/v1/checkout/health",
+      "container_name": "checkout-service", 
+      "criticality": "critical",
+      "dependencies": ["localstack", "product-service", "user-service"],
+      "recovery_strategy": "restart"
+    },
+    "analytics-service": {
+      "health_endpoint": "http://localhost:8083/health",
+      "container_name": "analytics-service",
+      "criticality": "medium",
+      "dependencies": ["redis", "localstack"],
+      "recovery_strategy": "restart"
+    },
+    "analytics-worker": {
+      "health_endpoint": null,
+      "container_name": "analytics-worker",
+      "criticality": "low",
+      "dependencies": ["redis", "analytics-service"],
+      "recovery_strategy": "restart"
+    },
+    "analytics-beat": {
+      "health_endpoint": null,
+      "container_name": "analytics-beat", 
+      "criticality": "low",
+      "dependencies": ["redis", "analytics-service"],
+      "recovery_strategy": "restart"
+    },
+    "analytics-worker-maintenance": {
+      "health_endpoint": null,
+      "container_name": "analytics-worker-maintenance",
+      "criticality": "low", 
+      "dependencies": ["redis", "analytics-service"],
+      "recovery_strategy": "restart"
+    }
+  },
+  "experiment_templates": {
+    "basic_service_kill": {
+      "description": "Simple service termination test",
+      "scenario": "random_kill",
+      "duration_seconds": 60,
+      "parameters": {}
+    },
+    "peak_load_chaos": {
+      "description": "Service failure during peak load",
+      "scenario": "load_test_chaos", 
+      "load_test": "microservices-load-test",
+      "chaos_delay_seconds": 30,
+      "duration_seconds": 300
+    },
+    "cascading_failure": {
+      "description": "Sequential service failures",
+      "scenario": "cascading_failure",
+      "services": ["analytics-service", "product-service", "checkout-service"],
+      "delay_between_failures_seconds": 15
+    },
+    "multiple_concurrent_failures": {
+      "description": "Simultaneous service failures",
+      "scenario": "multiple_chaos",
+      "services": ["product-service", "user-service"],
+      "concurrent": true
+    },
+    "database_connection_chaos": {
+      "description": "Database connectivity issues",
+      "scenario": "database_chaos",
+      "target": "localstack",
+      "duration_seconds": 120
+    }
+  }
+} 

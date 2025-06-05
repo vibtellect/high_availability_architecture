@@ -1,0 +1,66 @@
+{
+  "test_summary": {
+    "timestamp": "2025-06-04T17:19:42.949703",
+    "test_type": "random_service_termination",
+    "duration_seconds": 0,
+    "success": true
+  },
+  "results": {
+    "success": true,
+    "error": "Service checkout-service did not recover within 30s",
+    "recovery_time_seconds": 30,
+    "test_type": "random_service_termination"
+  },
+  "system_state": {
+    "services_health": {
+      "product-service": false,
+      "user-service": false,
+      "checkout-service": false,
+      "analytics-service": true
+    },
+    "containers_status": {
+      "product-service": {
+        "name": "product-service",
+        "status": "exited",
+        "running": false,
+        "health": "unhealthy"
+      },
+      "user-service": {
+        "name": "user-service",
+        "status": "exited",
+        "running": false,
+        "health": "unhealthy"
+      },
+      "checkout-service": {
+        "name": "checkout-service",
+        "status": "exited",
+        "running": false,
+        "health": "unhealthy"
+      },
+      "analytics-service": {
+        "name": "analytics-service",
+        "status": "running",
+        "running": true,
+        "health": "healthy"
+      },
+      "analytics-worker": {
+        "name": "analytics-worker",
+        "status": "running",
+        "running": true,
+        "health": "healthy"
+      },
+      "analytics-beat": {
+        "name": "analytics-beat",
+        "status": "running",
+        "running": true,
+        "health": "healthy"
+      },
+      "analytics-worker-maintenance": {
+        "name": "analytics-worker-maintenance",
+        "status": "running",
+        "running": true,
+        "health": "healthy"
+      }
+    }
+  }
+}

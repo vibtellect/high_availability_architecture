@@ -481,6 +481,29 @@ services:
       - analytics-service
     restart: unless-stopped
 
+  # Artillery Load Testing Service for User Journey Tests
+  artillery:
+    image: artilleryio/artillery:latest
+    container_name: artillery-user-journey
+    environment:
+      - ARTILLERY_PROMETHEUS_GATEWAY=http://prometheus:9090/api/v1/write
+      - ARTILLERY_STATSD_HOST=prometheus
+      - ARTILLERY_STATSD_PORT=9125
+      - NODE_ENV=production
+    volumes:
+      - ./infrastructure/artillery-scripts:/scripts:ro
+    networks:
+      - microservices-network
+    # Will be controlled via API calls, not auto-start
+    entrypoint: ["/bin/sh", "-c", "while true; do sleep 30; done"]
+    depends_on:
+      - prometheus
+      - product-service
+      - user-service
+      - checkout-service
+      - analytics-service
+    restart: unless-stopped
+
 networks:
   microservices-network:
     driver: bridge

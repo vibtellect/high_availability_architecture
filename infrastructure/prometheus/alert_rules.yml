@@ -37,15 +37,6 @@ groups:
           summary: "Chaos experiment is currently active"
           description: "Chaos engineering experiment is running - expect system instability"
 
-      - alert: CircuitBreakerOpen
-        expr: circuit_breaker_state == 0
-        for: 1m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Circuit breaker open on {{ $labels.service }}"
-          description: "Circuit breaker {{ $labels.circuit_breaker }} is open on {{ $labels.service }}"
-
       - alert: HighCPUUsage
         expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
         for: 5m
@@ -63,6 +54,92 @@ groups:
         annotations:
           summary: "High memory usage on {{ $labels.instance }}"
           description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+  # Circuit Breaker Specific Alerts
+  - name: circuit-breaker-alerts
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: |
+          (
+            resilience4j_circuitbreaker_state{state="open"} == 1
+            or
+            gobreaker_state{state="open"} == 1
+          )
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker open on {{ $labels.service }}"
+          description: "Circuit breaker {{ $labels.name }} is open on {{ $labels.service }} for {{ $labels.target_service }}"
+
+      - alert: CircuitBreakerHalfOpen
+        expr: |
+          (
+            resilience4j_circuitbreaker_state{state="half_open"} == 1
+            or
+            gobreaker_state{state="half_open"} == 1
+          )
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "Circuit breaker in half-open state"
+          description: "Circuit breaker {{ $labels.name }} is in half-open state on {{ $labels.service }}"
+
+      - alert: CircuitBreakerHighFailureRate
+        expr: |
+          (
+            rate(resilience4j_circuitbreaker_calls_total{kind="failed"}[5m]) / 
+            rate(resilience4j_circuitbreaker_calls_total[5m]) > 0.5
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failure rate on circuit breaker"
+          description: "Circuit breaker {{ $labels.name }} has failure rate of {{ $value | humanizePercentage }} on {{ $labels.service }}"
+
+      - alert: CircuitBreakerFrequentStateChanges
+        expr: |
+          (
+            rate(resilience4j_circuitbreaker_state_transitions_total[10m]) > 0.1
+            or
+            rate(gobreaker_state_transitions_total[10m]) > 0.1
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent circuit breaker state changes"
+          description: "Circuit breaker {{ $labels.name }} is changing state frequently ({{ $value }} transitions/sec)"
+
+      - alert: CircuitBreakerLongOpen
+        expr: |
+          (
+            resilience4j_circuitbreaker_state{state="open"} == 1
+            or
+            gobreaker_state{state="open"} == 1
+          )
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker open for extended period"
+          description: "Circuit breaker {{ $labels.name }} has been open for more than 5 minutes on {{ $labels.service }}"
+
+      - alert: CircuitBreakerNoRecentCalls
+        expr: |
+          (
+            rate(resilience4j_circuitbreaker_calls_total[10m]) == 0
+            or
+            rate(gobreaker_requests_total[10m]) == 0
+          )
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "No recent calls through circuit breaker"
+          description: "Circuit breaker {{ $labels.name }} has not received any calls in the last 10 minutes"
 
   - name: load-test-alerts
     rules:

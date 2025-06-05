@@ -1,0 +1,289 @@
+config:
+  target: "http://api-gateway"
+  phases:
+    - duration: 120
+      arrivalRate: 8
+      name: "Anonymous browsing warm up"
+    - duration: 300
+      arrivalRate: 15
+      rampTo: 25
+      name: "Peak anonymous traffic"
+    - duration: 180
+      arrivalRate: 25
+      rampTo: 10
+      name: "Wind down"
+  processor: "./test-data-generator.js"
+  defaults:
+    headers:
+      'Content-Type': 'application/json'
+      'User-Agent': 'Artillery Anonymous User Test'
+      'Accept': 'application/json'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  - name: "Anonymous Browse to Purchase"
+    weight: 60
+    flow:
+      # Step 1: Anonymous product browsing
+      - function: "generateDemographicData"
+      - function: "generateUserBehaviorTiming"
+      
+      # Browse products without authentication
+      - get:
+          url: "/api/v1/products"
+          expect:
+            - statusCode: 200
+            - hasProperty: "products"
+          capture:
+            - json: "$.products[0].id"
+              as: "browsedProductId1"
+            - json: "$.products[1].id"
+              as: "browsedProductId2"
+            - json: "$.products[2].id"
+              as: "browsedProductId3"
+
+      # Simulate browsing behavior
+      - think: "{{ browseTime }}"
+
+      # Step 2: Anonymous product search
+      - function: "generateSearchData"
+      - get:
+          url: "/api/v1/products/search"
+          qs:
+            q: "{{ searchTerm }}"
+            limit: 10
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$.products[0].id"
+              as: "searchResultId"
+
+      - think: 2
+
+      # Step 3: View specific product details (anonymous)
+      - get:
+          url: "/api/v1/products/{{ browsedProductId1 }}"
+          expect:
+            - statusCode: 200
+            - hasProperty: "product.id"
+          capture:
+            - json: "$.product.name"
+              as: "selectedProductName"
+            - json: "$.product.price"
+              as: "selectedProductPrice"
+
+      # User spends time reading product details
+      - think: "{{ readTime }}"
+
+      # Step 4: View another product (comparison shopping)
+      - get:
+          url: "/api/v1/products/{{ browsedProductId2 }}"
+          expect:
+            - statusCode: 200
+
+      - think: "{{ browseTime }}"
+
+      # Step 5: Decide to purchase - triggered registration
+      # User tries to add to cart but needs to register first
+      - function: "generateUserData"
+      
+      # User registration triggered by cart action
+      - post:
+          url: "/api/v1/users/register"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+            firstName: "{{ firstName }}"
+            lastName: "{{ lastName }}"
+            address:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+            phoneNumber: "{{ phoneNumber }}"
+            marketingOptIn: true
+            source: "cart_registration"
+          capture:
+            - json: "$.user.id"
+              as: "userId"
+            - json: "$.user.email"
+              as: "registeredEmail"
+          expect:
+            - statusCode: 201
+            - hasProperty: "user.id"
+
+      # Small pause for registration confirmation
+      - think: 1
+
+      # Step 6: Immediate login after registration
+      - post:
+          url: "/api/v1/users/login"
+          json:
+            email: "{{ registeredEmail }}"
+            password: "{{ userPassword }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+            - hasProperty: "token"
+
+      # Step 7: Add previously browsed product to cart
+      - post:
+          url: "/api/v1/carts/items"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            productId: "{{ browsedProductId1 }}"
+            quantity: 1
+          capture:
+            - json: "$.cart.id"
+              as: "cartId"
+          expect:
+            - statusCode: 201
+            - hasProperty: "cart.id"
+
+      # Quick decision making
+      - think: "{{ decideTime }}"
+
+      # Step 8: Quick checkout (motivated by initial browse)
+      - function: "generatePaymentData"
+      - post:
+          url: "/api/v1/checkout"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            cartId: "{{ cartId }}"
+            paymentMethod:
+              type: "{{ paymentType }}"
+              cardNumber: "{{ cardNumber }}"
+              expiryMonth: "{{ expiryMonth }}"
+              expiryYear: "{{ expiryYear }}"
+              cvv: "{{ cvv }}"
+              cardholderName: "{{ firstName }} {{ lastName }}"
+            shippingAddress:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+            billingAddress:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+            expressCheckout: true
+          capture:
+            - json: "$.order.id"
+              as: "orderId"
+          expect:
+            - statusCode: 201
+            - hasProperty: "order.id"
+
+  - name: "Anonymous Browse and Abandon"
+    weight: 30
+    flow:
+      # Represents users who browse but don't convert
+      - function: "generateUserBehaviorTiming"
+      
+      # Browse products
+      - get:
+          url: "/api/v1/products"
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$.products[0].id"
+              as: "browsedProductId"
+
+      - think: "{{ browseTime }}"
+
+      # View a few products
+      - get:
+          url: "/api/v1/products/{{ browsedProductId }}"
+          expect:
+            - statusCode: 200
+
+      - think: "{{ readTime }}"
+
+      # Search for something specific
+      - function: "generateSearchData"
+      - get:
+          url: "/api/v1/products/search"
+          qs:
+            q: "{{ searchTerm }}"
+          expect:
+            - statusCode: 200
+
+      # Think about it but ultimately leave
+      - think: "{{ decideTime }}"
+      
+      # User abandons without purchasing
+
+  - name: "Anonymous Research Heavy Browse"
+    weight: 10
+    flow:
+      # Represents users doing extensive research
+      - function: "generateUserBehaviorTiming"
+      
+      # Multiple product category browsing
+      - get:
+          url: "/api/v1/products"
+          qs:
+            category: "electronics"
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$.products"
+              as: "electronicsProducts"
+
+      - think: 4
+
+      - get:
+          url: "/api/v1/products"
+          qs:
+            category: "clothing"
+          expect:
+            - statusCode: 200
+
+      - think: 3
+
+      # Multiple search queries
+      - get:
+          url: "/api/v1/products/search"
+          qs:
+            q: "laptop"
+          expect:
+            - statusCode: 200
+
+      - think: 5
+
+      - get:
+          url: "/api/v1/products/search"
+          qs:
+            q: "smartphone"
+          expect:
+            - statusCode: 200
+
+      - think: 4
+
+      # View multiple product details
+      - function: "selectRandomProduct"
+      - get:
+          url: "/api/v1/products/{{ randomProductId }}"
+          expect:
+            - statusCode: 200
+
+      - think: 6
+
+      # Another product detail view
+      - function: "selectRandomProduct"
+      - get:
+          url: "/api/v1/products/{{ randomProductId }}"
+          expect:
+            - statusCode: 200
+
+      - think: 8
+
+      # User leaves after extensive research
+      # May return later as a more informed buyer 

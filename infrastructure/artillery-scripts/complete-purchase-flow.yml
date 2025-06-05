@@ -1,0 +1,287 @@
+config:
+  target: "http://api-gateway"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 300
+      arrivalRate: 10
+      rampTo: 20
+      name: "Ramp up load"
+    - duration: 600
+      arrivalRate: 20
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 20
+      rampTo: 5
+      name: "Ramp down"
+  processor: "./test-data-generator.js"
+  defaults:
+    headers:
+      'Content-Type': 'application/json'
+      'User-Agent': 'Artillery E-Commerce Load Test'
+      'Accept': 'application/json'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  - name: "Complete Purchase Journey"
+    weight: 70
+    flow:
+      # Step 1: User Registration
+      - function: "generateUserData"
+      - post:
+          url: "/api/v1/users/register"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+            firstName: "{{ firstName }}"
+            lastName: "{{ lastName }}"
+            address:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+          capture:
+            - json: "$.user.id"
+              as: "userId"
+            - json: "$.user.email"
+              as: "registeredEmail"
+          expect:
+            - statusCode: 201
+            - contentType: json
+            - hasProperty: "user.id"
+      
+      # Small pause to simulate reading registration confirmation
+      - think: 2
+
+      # Step 2: User Login
+      - post:
+          url: "/api/v1/users/login"
+          json:
+            email: "{{ registeredEmail }}"
+            password: "{{ userPassword }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+            - json: "$.user.id"
+              as: "loggedInUserId"
+          expect:
+            - statusCode: 200
+            - hasProperty: "token"
+      
+      # Step 3: Browse Products
+      - get:
+          url: "/api/v1/products"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.products[0].id"
+              as: "firstProductId"
+            - json: "$.products[1].id"
+              as: "secondProductId"
+            - json: "$.products[0].price"
+              as: "firstProductPrice"
+          expect:
+            - statusCode: 200
+            - hasProperty: "products"
+      
+      # Think time - user browses products
+      - think: 3
+
+      # Step 4: View Product Details (First Product)
+      - get:
+          url: "/api/v1/products/{{ firstProductId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.product.name"
+              as: "firstProductName"
+            - json: "$.product.description"
+              as: "firstProductDescription"
+          expect:
+            - statusCode: 200
+            - hasProperty: "product.id"
+
+      # Think time - user reads product details
+      - think: 4
+
+      # Step 5: Add First Product to Cart
+      - post:
+          url: "/api/v1/carts/items"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            productId: "{{ firstProductId }}"
+            quantity: 2
+          capture:
+            - json: "$.cart.id"
+              as: "cartId"
+            - json: "$.cart.totalAmount"
+              as: "cartTotal"
+          expect:
+            - statusCode: 201
+            - hasProperty: "cart.id"
+
+      # Step 6: Continue browsing and add second product
+      - get:
+          url: "/api/v1/products/{{ secondProductId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+      - think: 2
+
+      # Add second product to cart
+      - post:
+          url: "/api/v1/carts/items"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            productId: "{{ secondProductId }}"
+            quantity: 1
+          expect:
+            - statusCode: 201
+
+      # Step 7: View Cart
+      - get:
+          url: "/api/v1/carts"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.cart.items"
+              as: "cartItems"
+            - json: "$.cart.totalAmount"
+              as: "finalCartTotal"
+          expect:
+            - statusCode: 200
+            - hasProperty: "cart.items"
+
+      # Think time - user reviews cart
+      - think: 5
+
+      # Step 8: Checkout Process
+      - function: "generatePaymentData"
+      - post:
+          url: "/api/v1/checkout"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            cartId: "{{ cartId }}"
+            paymentMethod:
+              type: "{{ paymentType }}"
+              cardNumber: "{{ cardNumber }}"
+              expiryMonth: "{{ expiryMonth }}"
+              expiryYear: "{{ expiryYear }}"
+              cvv: "{{ cvv }}"
+              cardholderName: "{{ firstName }} {{ lastName }}"
+            shippingAddress:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+            billingAddress:
+              street: "{{ street }}"
+              city: "{{ city }}"
+              postalCode: "{{ postalCode }}"
+              country: "{{ country }}"
+          capture:
+            - json: "$.order.id"
+              as: "orderId"
+            - json: "$.order.status"
+              as: "orderStatus"
+            - json: "$.order.totalAmount"
+              as: "orderTotal"
+          expect:
+            - statusCode: 201
+            - hasProperty: "order.id"
+            - hasProperty: "order.status"
+
+      # Step 9: Order Confirmation
+      - get:
+          url: "/api/v1/orders/{{ orderId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+            - hasProperty: "order.id"
+
+  - name: "Quick Browse and Exit"
+    weight: 20
+    flow:
+      # Anonymous browsing that doesn't convert
+      - get:
+          url: "/api/v1/products"
+          expect:
+            - statusCode: 200
+
+      - think: 3
+
+      - function: "selectRandomProduct"
+      - get:
+          url: "/api/v1/products/{{ randomProductId }}"
+          expect:
+            - statusCode: 200
+
+      - think: 2
+
+      # User exits without purchasing
+
+  - name: "Returning User Quick Purchase"
+    weight: 10
+    flow:
+      # Login with existing user
+      - function: "generateReturningUserData"
+      - post:
+          url: "/api/v1/users/login"
+          json:
+            email: "{{ returningUserEmail }}"
+            password: "{{ returningUserPassword }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+            - json: "$.user.id"
+              as: "userId"
+          expect:
+            - statusCode: 200
+
+      # Quick product selection
+      - get:
+          url: "/api/v1/products"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.products[2].id"
+              as: "quickProductId"
+          expect:
+            - statusCode: 200
+
+      # Add to cart immediately
+      - post:
+          url: "/api/v1/carts/items"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            productId: "{{ quickProductId }}"
+            quantity: 1
+          capture:
+            - json: "$.cart.id"
+              as: "cartId"
+          expect:
+            - statusCode: 201
+
+      # Quick checkout with saved payment
+      - function: "generateSavedPaymentData"
+      - post:
+          url: "/api/v1/checkout"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            cartId: "{{ cartId }}"
+            paymentMethod:
+              type: "saved"
+              savedPaymentId: "{{ savedPaymentId }}"
+          expect:
+            - statusCode: 201 

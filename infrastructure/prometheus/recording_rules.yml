@@ -48,6 +48,72 @@ groups:
       - record: chaos:recovery_attempts:rate5m
         expr: rate(auto_recovery_attempts_total[5m])
 
+  # Circuit Breaker Recording Rules
+  - name: circuit-breaker-recording-rules
+    interval: 30s
+    rules:
+      # Resilience4j Circuit Breaker Metrics (Spring Boot services)
+      - record: circuitbreaker:requests:rate5m
+        expr: sum(rate(resilience4j_circuitbreaker_calls_total[5m])) by (name, service, target_service)
+
+      - record: circuitbreaker:failures:rate5m
+        expr: sum(rate(resilience4j_circuitbreaker_calls_total{kind="failed"}[5m])) by (name, service, target_service)
+
+      - record: circuitbreaker:success:rate5m
+        expr: sum(rate(resilience4j_circuitbreaker_calls_total{kind="successful"}[5m])) by (name, service, target_service)
+
+      - record: circuitbreaker:failure_rate:rate5m
+        expr: circuitbreaker:failures:rate5m / circuitbreaker:requests:rate5m
+
+      - record: circuitbreaker:state_changes:rate5m
+        expr: sum(rate(resilience4j_circuitbreaker_state_transitions_total[5m])) by (name, service, target_service)
+
+      # Go Circuit Breaker Metrics (Go services)
+      - record: gobreaker:requests:rate5m
+        expr: sum(rate(gobreaker_requests_total[5m])) by (name, service, target_service)
+
+      - record: gobreaker:failures:rate5m
+        expr: sum(rate(gobreaker_failures_total[5m])) by (name, service, target_service)
+
+      - record: gobreaker:success:rate5m
+        expr: sum(rate(gobreaker_successes_total[5m])) by (name, service, target_service)
+
+      - record: gobreaker:failure_rate:rate5m
+        expr: gobreaker:failures:rate5m / gobreaker:requests:rate5m
+
+      - record: gobreaker:state_changes:rate5m
+        expr: sum(rate(gobreaker_state_transitions_total[5m])) by (name, service, target_service)
+
+      # Combined Circuit Breaker Metrics (both types)
+      - record: cb:total_requests:rate5m
+        expr: |
+          (circuitbreaker:requests:rate5m or vector(0)) + 
+          (gobreaker:requests:rate5m or vector(0))
+
+      - record: cb:total_failures:rate5m
+        expr: |
+          (circuitbreaker:failures:rate5m or vector(0)) + 
+          (gobreaker:failures:rate5m or vector(0))
+
+      - record: cb:overall_failure_rate:rate5m
+        expr: cb:total_failures:rate5m / cb:total_requests:rate5m
+
+      # Circuit Breaker State Indicators
+      - record: cb:open_state:current
+        expr: |
+          (resilience4j_circuitbreaker_state{state="open"} or vector(0)) +
+          (gobreaker_state{state="open"} or vector(0))
+
+      - record: cb:half_open_state:current
+        expr: |
+          (resilience4j_circuitbreaker_state{state="half_open"} or vector(0)) +
+          (gobreaker_state{state="half_open"} or vector(0))
+
+      - record: cb:closed_state:current
+        expr: |
+          (resilience4j_circuitbreaker_state{state="closed"} or vector(0)) +
+          (gobreaker_state{state="closed"} or vector(0))
+
   - name: aggregated-metrics
     interval: 60s
     rules:
@@ -78,6 +144,16 @@ groups:
       - record: cluster:memory_utilization:avg
         expr: avg(node:memory_utilization:rate5m)
 
+      # Circuit Breaker Aggregates
+      - record: system:circuit_breakers:open_count
+        expr: sum(cb:open_state:current)
+
+      - record: system:circuit_breakers:total_failure_rate
+        expr: avg(cb:overall_failure_rate:rate5m)
+
+      - record: system:circuit_breakers:state_changes_rate
+        expr: sum(circuitbreaker:state_changes:rate5m) + sum(gobreaker:state_changes:rate5m)
+
   - name: slo-metrics
     interval: 60s
     rules:
@@ -91,6 +167,16 @@ groups:
       - record: slo:response_time:p95:7d
         expr: quantile_over_time(0.95, service:response_time:p95:rate5m[7d])
 
-      # Resilience Metrics - Simplified version
+      # Resilience Metrics - Enhanced with Circuit Breaker
       - record: resilience:recovery_success_rate:rate1h
-        expr: rate(auto_recovery_success_total[1h]) / rate(auto_recovery_attempts_total[1h]) 
+        expr: rate(auto_recovery_success_total[1h]) / rate(auto_recovery_attempts_total[1h])
+
+      - record: resilience:circuit_breaker_effectiveness:7d
+        expr: |
+          1 - (
+            avg_over_time(cb:overall_failure_rate:rate5m[7d]) / 
+            avg_over_time(service:error_rate:rate5m[7d])
+          )
+
+      - record: resilience:system_stability:7d
+        expr: 1 - avg_over_time(system:circuit_breakers:open_count[7d]) / count(up{job=~".*-service"}) 
