@@ -698,3 +698,4 @@ plannung/
 
 # LocalStack data directory (development only)
 localstack-data/
+frontend/vite-profile-*.cpuprofile
