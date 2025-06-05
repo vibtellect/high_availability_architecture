@@ -29,7 +29,7 @@ import {
   AccordionDetails
 } from '@mui/material';
 import {
-  Electrical as ElectricalIcon,
+  FlashOn as ElectricalIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
