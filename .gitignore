@@ -521,6 +521,29 @@ config/local.json
 config/development.json
 config/production.json
 
+# ================================
+# Internal Documentation & Planning
+# (Should not be in public repository)
+# ================================
+# Strategy and planning documents
+*_STRATEGY.md
+*_PLAN.md
+*_ROADMAP.md
+
+# Task completion and progress tracking
+TASK_*.md
+*_COMPLETION*.md
+*_EXPECTED_OUTCOMES.md
+
+# Demo scripts and internal documentation
+DEMO_SCRIPT_*.md
+*_DEMO_*.md
+
+# Chaos engineering and internal guides
+CHAOS_ENGINEERING_*.md
+FRONTEND_*.md
+AWS_*.md
+
 # Backup files
 *.bak
 *.backup
