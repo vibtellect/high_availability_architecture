@@ -43,11 +43,9 @@ dependencies {
 	// Jackson for JSON processing (already implied by Kotlin module)
 	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 	
-	// Resilience4j Circuit Breaker
-	implementation("io.github.resilience4j:resilience4j-spring-boot3:2.2.0")
-	implementation("io.github.resilience4j:resilience4j-kotlin:2.2.0")
-	implementation("io.github.resilience4j:resilience4j-actuator:2.2.0")
-	implementation("io.github.resilience4j:resilience4j-micrometer:2.2.0")
+	// Resilience4j Circuit Breaker (simplified for quick fix)
+	implementation("io.github.resilience4j:resilience4j-spring-boot3:2.1.0")
+	implementation("io.github.resilience4j:resilience4j-kotlin:2.1.0")
 	
 	// Testing
 	testImplementation("org.springframework.boot:spring-boot-starter-test")

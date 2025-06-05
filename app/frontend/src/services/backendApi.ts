@@ -2,11 +2,11 @@ import type { Product, User, Order, CartItem } from '../types/Product';
 
 // Backend service URLs
 const BACKEND_SERVICES = {
-  PRODUCT_SERVICE: 'http://localhost',
-  USER_SERVICE: 'http://localhost',
-  CHECKOUT_SERVICE: 'http://localhost',
+  PRODUCT_SERVICE: 'http://localhost:8080',
+  USER_SERVICE: 'http://localhost:8081',
+  CHECKOUT_SERVICE: 'http://localhost:8082',
   ANALYTICS_SERVICE: 'http://localhost:8083',
-  API_GATEWAY: 'http://localhost',
+  API_GATEWAY: 'http://localhost:80',
   GRAFANA: 'http://localhost:3000',
   JAEGER: 'http://localhost:16686',
   PROMETHEUS: 'http://localhost:9090'

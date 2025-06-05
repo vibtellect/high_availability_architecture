@@ -5,7 +5,6 @@ import {
   Typography,
   Button,
   IconButton,
-  Badge,
   Box,
   InputBase,
   Menu,
@@ -21,18 +20,14 @@ import {
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  ShoppingCart as ShoppingCartIcon,
   AccountCircle as AccountCircleIcon,
   Menu as MenuIcon,
   Home as HomeIcon,
   Store as StoreIcon,
   Dashboard as DashboardIcon,
-  Architecture as ArchitectureIcon,
-  FavoriteOutlined as FavoriteIcon,
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useCart } from '../../context/CartContext';
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -78,7 +73,6 @@ const Header: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const location = useLocation();
-  const { itemCount } = useCart();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,10 +101,11 @@ const Header: React.FC = () => {
     }
   };
 
+  // Demo-focused navigation
   const navigationItems = [
     { text: 'Home', icon: <HomeIcon />, path: '/' },
-    { text: 'Shop', icon: <StoreIcon />, path: '/products' },
-    { text: 'HA Dashboard', icon: <ArchitectureIcon />, path: '/ha-dashboard' },
+    { text: 'Products', icon: <StoreIcon />, path: '/products' },
+    { text: 'HA Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   ];
 
   const drawer = (
@@ -136,26 +131,6 @@ const Header: React.FC = () => {
             <ListItemText primary={item.text} />
           </ListItem>
         ))}
-        
-        {/* Mobile Cart Item */}
-        <ListItem 
-          component="button"
-          onClick={() => handleNavigation('/cart')}
-          sx={{
-            cursor: 'pointer',
-            backgroundColor: location.pathname === '/cart' ? 'action.selected' : 'transparent',
-            '&:hover': {
-              backgroundColor: 'action.hover'
-            }
-          }}
-        >
-          <ListItemIcon>
-            <Badge badgeContent={itemCount} color="error">
-              <ShoppingCartIcon />
-            </Badge>
-          </ListItemIcon>
-          <ListItemText primary={`Warenkorb (${itemCount})`} />
-        </ListItem>
       </List>
     </Box>
   );
@@ -177,19 +152,13 @@ const Header: React.FC = () => {
       open={isMenuOpen}
       onClose={handleMenuClose}
     >
-      <MenuItem onClick={() => { handleMenuClose(); handleNavigation('/profile'); }}>
+      <MenuItem onClick={() => { handleMenuClose(); alert('Demo-Feature: User Profile'); }}>
         👤 Profil
       </MenuItem>
-      <MenuItem onClick={() => { handleMenuClose(); handleNavigation('/orders'); }}>
-        📦 Meine Bestellungen
-      </MenuItem>
-      <MenuItem onClick={() => { handleMenuClose(); handleNavigation('/wishlist'); }}>
-        ❤️ Wunschliste
-      </MenuItem>
-      <MenuItem onClick={handleMenuClose}>
+      <MenuItem onClick={() => { handleMenuClose(); alert('Demo-Feature: System Settings'); }}>
         ⚙️ Einstellungen
       </MenuItem>
-      <MenuItem onClick={handleMenuClose}>
+      <MenuItem onClick={() => { handleMenuClose(); alert('Demo-Feature: Logout'); }}>
         🚪 Abmelden
       </MenuItem>
     </Menu>
@@ -199,7 +168,7 @@ const Header: React.FC = () => {
     <>
       <AppBar position="sticky" elevation={1}>
         <Toolbar>
-          {/* Mobile Menu Button */}
+          {/* Mobile menu button */}
           {isMobile && (
             <IconButton
               color="inherit"
@@ -212,36 +181,35 @@ const Header: React.FC = () => {
             </IconButton>
           )}
 
-          {/* Logo/Brand */}
+          {/* Logo */}
           <Typography
             variant="h6"
-            noWrap
             component="div"
-            onClick={() => handleNavigation('/')}
             sx={{
-              display: { xs: 'none', sm: 'block' },
-              cursor: 'pointer',
+              flexGrow: 0,
               fontWeight: 'bold',
               mr: 4,
+              cursor: 'pointer',
             }}
+            onClick={() => handleNavigation('/')}
           >
             🛍️ HA E-Commerce
           </Typography>
 
           {/* Desktop Navigation */}
           {!isMobile && (
-            <Box sx={{ display: 'flex', gap: 1, mr: 'auto' }}>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
               {navigationItems.map((item) => (
                 <Button
                   key={item.text}
                   color="inherit"
-                  startIcon={item.icon}
                   onClick={() => handleNavigation(item.path)}
+                  startIcon={item.icon}
                   sx={{
                     backgroundColor: location.pathname === item.path ? 'rgba(255,255,255,0.1)' : 'transparent',
                     '&:hover': {
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                    },
+                      backgroundColor: 'rgba(255,255,255,0.1)'
+                    }
                   }}
                 >
                   {item.text}
@@ -250,14 +218,17 @@ const Header: React.FC = () => {
             </Box>
           )}
 
-          {/* Search Bar */}
-          <Search sx={{ flexGrow: isMobile ? 1 : 0 }}>
+          {/* Spacer for mobile */}
+          {isMobile && <Box sx={{ flexGrow: 1 }} />}
+
+          {/* Search */}
+          <Search>
             <SearchIconWrapper>
               <SearchIcon />
             </SearchIconWrapper>
             <form onSubmit={handleSearchSubmit}>
               <StyledInputBase
-                placeholder="Suchen…"
+                placeholder="Produkte suchen..."
                 inputProps={{ 'aria-label': 'search' }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -265,71 +236,38 @@ const Header: React.FC = () => {
             </form>
           </Search>
 
-          <Box sx={{ flexGrow: 1 }} />
-
-          {/* Action Buttons */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Shopping Cart */}
-            <Tooltip title="Warenkorb">
-              <IconButton
-                size="large"
-                aria-label={`show ${itemCount} items in cart`}
-                color="inherit"
-                onClick={() => handleNavigation('/cart')}
-              >
-                <Badge badgeContent={itemCount} color="error">
-                  <ShoppingCartIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-
-            {/* Wishlist */}
-            <Tooltip title="Wunschliste">
-              <IconButton
-                size="large"
-                aria-label="wishlist"
-                color="inherit"
-                onClick={() => handleNavigation('/wishlist')}
-              >
-                <FavoriteIcon />
-              </IconButton>
-            </Tooltip>
-
-            {/* Profile Menu */}
-            <Tooltip title="Profil">
-              <IconButton
-                size="large"
-                edge="end"
-                aria-label="account of current user"
-                aria-controls="primary-search-account-menu"
-                aria-haspopup="true"
-                onClick={handleProfileMenuOpen}
-                color="inherit"
-              >
-                <AccountCircleIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          {/* User menu */}
+          <Tooltip title="Benutzermenü">
+            <IconButton
+              size="large"
+              edge="end"
+              aria-label="account of current user"
+              aria-controls="primary-search-account-menu"
+              aria-haspopup="true"
+              onClick={handleProfileMenuOpen}
+              color="inherit"
+            >
+              <AccountCircleIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
 
-      {/* Mobile Drawer */}
-      <nav>
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
-          }}
-        >
-          {drawer}
-        </Drawer>
-      </nav>
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile.
+        }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
+        }}
+      >
+        {drawer}
+      </Drawer>
 
       {renderMenu}
     </>
