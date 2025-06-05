@@ -15,12 +15,11 @@ import {
   Tooltip
 } from '@mui/material';
 import {
-  ShoppingCart as ShoppingCartIcon,
   Visibility as VisibilityIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import type { Product } from '../../types/Product';
-import { useCart } from '../../context/CartContext';
 import { analyticsService } from '../../services/api';
 
 interface ProductCardProps {
@@ -29,20 +28,17 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onViewDetails }) => {
-  const { addToCart, getCartItem } = useCart();
-  const [showSuccess, setShowSuccess] = useState(false);
-  const cartItem = getCartItem(product.id);
-
-  const handleAddToCart = () => {
-    addToCart(product);
-    setShowSuccess(true);
-    analyticsService.trackProductView(product.id);
-  };
+  const [showDemoMessage, setShowDemoMessage] = useState(false);
 
   const handleViewDetails = () => {
     if (onViewDetails) {
       onViewDetails(product);
     }
+    analyticsService.trackProductView(product.id);
+  };
+
+  const handleDemoAction = () => {
+    setShowDemoMessage(true);
     analyticsService.trackProductView(product.id);
   };
 
@@ -176,18 +172,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onViewDetails }) => 
             {formatPrice(product.price)}
           </Typography>
 
-          {/* Cart Status */}
-          {cartItem && (
-            <Typography 
-              variant="caption" 
-              color="success.main"
-              display="block"
-              mt={1}
-              fontWeight="medium"
-            >
-              🛒 {cartItem.quantity} im Warenkorb
-            </Typography>
-          )}
+          {/* Demo Badge */}
+          <Typography 
+            variant="caption" 
+            color="info.main"
+            display="block"
+            mt={1}
+            fontWeight="medium"
+          >
+            📊 Demo-Produkt für HA-Testing
+          </Typography>
         </CardContent>
 
         {/* Actions */}
@@ -198,46 +192,47 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onViewDetails }) => 
             alignItems="center" 
             width="100%"
           >
+            {/* View Details Button */}
             <Button
+              variant="outlined"
               startIcon={<VisibilityIcon />}
               onClick={handleViewDetails}
-              variant="outlined"
               size="small"
+              sx={{ flexGrow: 1, mr: 1 }}
             >
               Details
             </Button>
 
-            <Tooltip title={product.stock === 0 ? 'Nicht verfügbar' : 'In den Warenkorb'}>
-              <span>
-                <Button
-                  startIcon={<ShoppingCartIcon />}
-                  onClick={handleAddToCart}
-                  variant="contained"
-                  size="small"
-                  disabled={product.stock === 0}
-                  sx={{ ml: 1 }}
-                >
-                  {cartItem ? `+1 (${cartItem.quantity})` : 'In Warenkorb'}
-                </Button>
-              </span>
+            {/* Demo Action Button */}
+            <Tooltip title="Demo-Feature: Zeigt Analytics-Tracking">
+              <Button
+                variant="contained"
+                startIcon={<InfoIcon />}
+                onClick={handleDemoAction}
+                disabled={product.stock === 0}
+                size="small"
+                sx={{ flexGrow: 1 }}
+              >
+                Demo Action
+              </Button>
             </Tooltip>
           </Box>
         </CardActions>
       </Card>
 
-      {/* Success Snackbar */}
+      {/* Demo Success Message */}
       <Snackbar
-        open={showSuccess}
+        open={showDemoMessage}
         autoHideDuration={3000}
-        onClose={() => setShowSuccess(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        onClose={() => setShowDemoMessage(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert 
-          onClose={() => setShowSuccess(false)} 
-          severity="success" 
+          onClose={() => setShowDemoMessage(false)} 
+          severity="info"
           variant="filled"
         >
-          {product.name} wurde in den Warenkorb gelegt!
+          📊 Demo: Analytics Event für "{product.name}" wurde erfasst
         </Alert>
       </Snackbar>
     </>
